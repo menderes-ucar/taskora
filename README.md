@@ -7,9 +7,9 @@ Taskora is a modern mobile SaaS platform designed to bridge the gap between empl
 ## 📱 App UI Previews
 
 <p align="center">
-  <img src="assets/images/screenshot_1.png" width="28%" alt="Active Jobs" /> &nbsp;&nbsp;&nbsp;
-  <img src="assets/images/screenshot_2.png" width="28%" alt="Contract Detail & Escrow" /> &nbsp;&nbsp;&nbsp;
-  <img src="assets/images/screenshot_3.png" width="28%" alt="Employer Dashboard" />
+  <img src="https://github.com/user-attachments/assets/d0f10584-75e5-4cd9-b619-ff7682137f0c" width="30%" alt="App Preview 1" /> &nbsp;&nbsp;&nbsp;
+  <img src="https://github.com/user-attachments/assets/cce4ac49-e45f-4c4e-905f-b395325fbaf0" width="30%" alt="App Preview 2" /> &nbsp;&nbsp;&nbsp;
+  <img src="https://github.com/user-attachments/assets/a678f292-5d16-4507-9392-1bde6ef23b56" width="30%" alt="App Preview 3" />
 </p>
 
 ---
