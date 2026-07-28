@@ -10,6 +10,9 @@ class TransactionModel {
   final DateTime createdAt;
   final bool isIncome;
 
+  // Yeni eklendi
+  final String status;
+
   const TransactionModel({
     required this.id,
     required this.userId,
@@ -19,6 +22,7 @@ class TransactionModel {
     required this.description,
     required this.createdAt,
     required this.isIncome,
+    this.status = 'completed',
   });
 
   TransactionModel copyWith({
@@ -30,6 +34,7 @@ class TransactionModel {
     String? description,
     DateTime? createdAt,
     bool? isIncome,
+    String? status,
   }) {
     return TransactionModel(
       id: id ?? this.id,
@@ -40,22 +45,26 @@ class TransactionModel {
       description: description ?? this.description,
       createdAt: createdAt ?? this.createdAt,
       isIncome: isIncome ?? this.isIncome,
+      status: status ?? this.status,
     );
   }
 
   factory TransactionModel.fromMap(Map<String, dynamic> map) {
     return TransactionModel(
-      id: map['id'] as String,
-      userId: map['user_id'] as String,
-      amount: (map['amount'] as num).toDouble(),
+      id: map['id']?.toString() ?? '',
+      userId: map['user_id']?.toString() ?? '',
+      amount: (map['amount'] as num?)?.toDouble() ?? 0,
       type: TransactionType.values.firstWhere(
             (e) => e.name == map['type'],
         orElse: () => TransactionType.deposit,
       ),
-      title: map['title'] as String,
-      description: map['description'] as String,
-      createdAt: DateTime.parse(map['created_at'] as String),
-      isIncome: map['is_income'] as bool,
+      title: map['title']?.toString() ?? '',
+      description: map['description']?.toString() ?? '',
+      createdAt: map['created_at'] != null
+          ? DateTime.parse(map['created_at'].toString())
+          : DateTime.now(),
+      isIncome: map['is_income'] as bool? ?? false,
+      status: map['status']?.toString() ?? 'completed',
     );
   }
 
@@ -69,6 +78,12 @@ class TransactionModel {
       'description': description,
       'created_at': createdAt.toIso8601String(),
       'is_income': isIncome,
+      'status': status,
     };
   }
+
+  factory TransactionModel.fromJson(Map<String, dynamic> json) =>
+      TransactionModel.fromMap(json);
+
+  Map<String, dynamic> toJson() => toMap();
 }

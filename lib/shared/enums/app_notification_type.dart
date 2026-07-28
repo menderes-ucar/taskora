@@ -1,9 +1,16 @@
 enum AppNotificationType {
+  newMessage,
   newProposal,
   proposalAccepted,
   proposalRejected,
-  newMessage,
+  jobApproved,
+  jobRejected,
   contractCreated,
   workSubmitted,
   contractCompleted,
+  newJobPosted,
+  walletUpdated,
+  coinRefund,
+  payoutStatusChanged,
+  systemAnnouncement,
 }

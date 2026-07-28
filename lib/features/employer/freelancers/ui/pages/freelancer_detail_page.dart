@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../../app/theme/app_colors.dart';
-import '../../../../auth/presentation/providers/auth_provider.dart';
-import '../../../../freelancer/messages/ui/pages/chat_detail_page.dart';
+import '../../../../auth/presentation/providers/auth_state.dart';
+import '../../../../messages/presentation/pages/chat_detai_page.dart';
 
 
 class FreelancerDetailPage extends ConsumerStatefulWidget {
@@ -22,7 +22,6 @@ class FreelancerDetailPage extends ConsumerStatefulWidget {
 
 class _FreelancerDetailPageState extends ConsumerState<FreelancerDetailPage> {
   final supabase = Supabase.instance.client;
-
   Map<String, dynamic>? profile;
   List<Map<String, dynamic>> portfolioItems = [];
   bool isLoading = true;
@@ -50,7 +49,6 @@ class _FreelancerDetailPageState extends ConsumerState<FreelancerDetailPage> {
       if (profileResponse == null) {
         setState(() {
           profile = null;
-          portfolioItems = [];
           isLoading = false;
           errorText = 'Freelancer bulunamadı';
         });
@@ -58,6 +56,7 @@ class _FreelancerDetailPageState extends ConsumerState<FreelancerDetailPage> {
       }
 
       List<Map<String, dynamic>> portfolioResponse = [];
+
       try {
         final result = await supabase
             .from('portfolio_items')
@@ -67,9 +66,7 @@ class _FreelancerDetailPageState extends ConsumerState<FreelancerDetailPage> {
 
         portfolioResponse =
         List<Map<String, dynamic>>.from(result as List<dynamic>);
-      } catch (_) {
-        portfolioResponse = [];
-      }
+      } catch (_) {}
 
       setState(() {
         profile = Map<String, dynamic>.from(profileResponse);
@@ -84,21 +81,6 @@ class _FreelancerDetailPageState extends ConsumerState<FreelancerDetailPage> {
     }
   }
 
-  void _goToChat({
-    required String otherUserId,
-    required String otherUserName,
-  }) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ChatDetailPage(
-          otherUserId: otherUserId,
-          otherUserName: otherUserName,
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final currentUser = ref.watch(authProvider).user;
@@ -107,7 +89,7 @@ class _FreelancerDetailPageState extends ConsumerState<FreelancerDetailPage> {
       return const Scaffold(
         backgroundColor: AppColors.primary,
         body: Center(
-          child: CircularProgressIndicator(),
+          child: CircularProgressIndicator(color: Colors.white),
         ),
       );
     }
@@ -117,28 +99,28 @@ class _FreelancerDetailPageState extends ConsumerState<FreelancerDetailPage> {
         backgroundColor: AppColors.primary,
         appBar: AppBar(
           backgroundColor: AppColors.primary,
-          scrolledUnderElevation: 0,
-          title: const Text('Freelancer'),
+          elevation: 0,
+          title: const Text(
+            'Freelancer',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ),
         body: Center(
-          child: Text(errorText ?? 'Freelancer bulunamadı'),
+          child: Text(
+            errorText ?? 'Hata',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       );
     }
 
-    final name = (profile!['name'] ?? '').toString();
-    final title = (profile!['title'] ?? '-').toString();
-    final bio = (profile!['bio'] ?? '').toString();
-    final rating = (profile!['rating'] ?? 0).toString();
-    final reviewCount = (profile!['review_count'] ?? 0).toString();
-    final completedJobs = (profile!['completed_jobs'] ?? 0).toString();
-
-    final skillsRaw = profile!['skills'];
-    final List<String> skills = skillsRaw is List
-        ? skillsRaw.map((e) => e.toString()).toList()
-        : <String>[];
-
-    final displayName = name.isEmpty ? 'İsimsiz Kullanıcı' : name;
+    final displayName = (profile!['name'] ?? 'İsimsiz').toString();
     final isOwnProfile =
         currentUser != null && currentUser.id == widget.freelancerId;
 
@@ -146,35 +128,57 @@ class _FreelancerDetailPageState extends ConsumerState<FreelancerDetailPage> {
       backgroundColor: AppColors.primary,
       appBar: AppBar(
         backgroundColor: AppColors.primary,
-        scrolledUnderElevation: 0,
-        title: const Text('Freelancer Profili'),
+        elevation: 0,
+        title: const Text(
+          'Profil',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
           Container(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: AppColors.border),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(
+                color: AppColors.primaryDark.withValues(alpha: 0.22),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.black.withValues(alpha: 0.12),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
             ),
             child: Column(
               children: [
                 Container(
-                  width: 84,
-                  height: 84,
+                  width: 88,
+                  height: 88,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(24),
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.primary.withValues(alpha: 0.28),
+                        AppColors.primaryDark.withValues(alpha: 0.18),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    shape: BoxShape.circle,
                   ),
                   child: const Icon(
-                    Icons.person,
-                    size: 38,
+                    Icons.person_rounded,
+                    size: 42,
                     color: AppColors.primaryDark,
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
                 Text(
                   displayName,
                   style: const TextStyle(
@@ -185,284 +189,101 @@ class _FreelancerDetailPageState extends ConsumerState<FreelancerDetailPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  title,
+                  (profile!['title'] ?? '-').toString(),
                   style: const TextStyle(
-                    color: AppColors.grey,
-                    fontWeight: FontWeight.w600,
+                    color: AppColors.primaryDark,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  bio,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors.grey,
-                    height: 1.6,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _MiniStat(title: 'Puan', value: rating),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _MiniStat(title: 'Yorum', value: reviewCount),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _MiniStat(title: 'İş', value: completedJobs),
-                    ),
-                  ],
-                ),
-                if (!isOwnProfile) ...[
-                  const SizedBox(height: 16),
+                const SizedBox(height: 24),
+                if (!isOwnProfile)
                   SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: currentUser == null
-                          ? null
-                          : () => _goToChat(
-                        otherUserId: widget.freelancerId,
-                        otherUserName: displayName,
-                      ),
+                    height: 50,
+                    child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primaryDark,
-                        foregroundColor: Colors.white,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        textStyle: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
+                          borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      icon: const Icon(Icons.chat_bubble_outline_rounded),
-                      label: Text(
-                        currentUser == null ? 'Giriş yapmalısın' : 'Mesaj At',
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ChatDetailPage(
+                            otherUserId: widget.freelancerId,
+                            otherUserName: displayName,
+                          ),
+                        ),
+                      ),
+                      child: const Text(
+                        'Mesaj At',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
-                ],
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Yetenekler',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.black,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                if (skills.isEmpty)
-                  const Text(
-                    'Henüz yetenek eklenmemiş.',
-                    style: TextStyle(color: AppColors.grey),
-                  )
-                else
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: skills
-                        .map(
-                          (skill) => Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.lightGrey,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          skill,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.black,
-                          ),
-                        ),
-                      ),
-                    )
-                        .toList(),
-                  ),
-              ],
+          const SizedBox(height: 24),
+          const Text(
+            'Yetenekler',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
             ),
           ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Portföy',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.black,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                if (portfolioItems.isEmpty)
-                  const Text(
-                    'Henüz portföy eklenmemiş.',
-                    style: TextStyle(color: AppColors.grey),
-                  )
-                else
-                  ...portfolioItems.map(
-                        (item) {
-                      final imagesRaw = item['image_urls'];
-                      final imageUrls = imagesRaw is List
-                          ? imagesRaw.map((e) => e.toString()).toList()
-                          : <String>[];
-
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.lightGrey,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (imageUrls.isNotEmpty)
-                                SizedBox(
-                                  height: 170,
-                                  child: ClipRRect(
-                                    borderRadius: const BorderRadius.vertical(
-                                      top: Radius.circular(16),
-                                    ),
-                                    child: PageView.builder(
-                                      itemCount: imageUrls.length,
-                                      itemBuilder: (context, index) {
-                                        final imageUrl = imageUrls[index];
-
-                                        return Image.network(
-                                          imageUrl,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) {
-                                            return Container(
-                                              color: AppColors.black,
-                                              child: const Center(
-                                                child: Icon(
-                                                  Icons.broken_image_outlined,
-                                                  color: Colors.white,
-                                                  size: 30,
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ),
-                              Padding(
-                                padding: const EdgeInsets.all(14),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      (item['title'] ?? '').toString(),
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        color: AppColors.black,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      (item['category'] ?? '').toString(),
-                                      style: const TextStyle(
-                                        color: AppColors.primaryDark,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      (item['description'] ?? '').toString(),
-                                      style: const TextStyle(
-                                        color: AppColors.grey,
-                                        height: 1.5,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-              ],
-            ),
-          ),
+          const SizedBox(height: 12),
+          _buildSkillsWrap(profile!['skills']),
         ],
       ),
     );
   }
-}
 
-class _MiniStat extends StatelessWidget {
-  final String title;
-  final String value;
+  Widget _buildSkillsWrap(dynamic skillsRaw) {
+    final List<String> skills = skillsRaw is List
+        ? skillsRaw.map((e) => e.toString()).toList()
+        : [];
 
-  const _MiniStat({
-    required this.title,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        color: AppColors.lightGrey,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        children: [
-          Text(
-            value,
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: skills
+          .map(
+            (s) => Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 8,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.primaryDark.withValues(alpha: 0.22),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.black.withValues(alpha: 0.06),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Text(
+            s,
             style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              color: AppColors.black,
+              fontWeight: FontWeight.bold,
+              color: AppColors.primaryDark,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.grey,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
+        ),
+      )
+          .toList(),
     );
   }
 }

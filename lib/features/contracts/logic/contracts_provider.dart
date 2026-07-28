@@ -1,16 +1,60 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../../shared/enums/app_notification_type.dart';
 import '../../../../shared/enums/contract_status.dart';
+import '../../../../shared/enums/payment_status.dart';
+import '../../../../shared/models/contract_delivery_model.dart';
 import '../../../../shared/models/contract_model.dart';
-import '../../../shared/enums/payment_status.dart';
-import '../../freelancer/notification/services/notification_helper.dart';
-import '../data/contract_repository_provider.dart';
+import '../../../../shared/models/contract_timeline_model.dart';
+import '../data/contract_repository.dart';
+import '../data/repositories/supabase_contract_repository.dart';
+
+final contractSupabaseClientProvider = Provider<SupabaseClient>((ref) {
+  return Supabase.instance.client;
+});
+
+final contractRepositoryProvider = Provider<IContractRepository>((ref) {
+  final supabase = ref.watch(contractSupabaseClientProvider);
+  return SupabaseContractRepository(supabase);
+});
 
 class ContractsNotifier extends AsyncNotifier<List<ContractModel>> {
+  StreamSubscription<List<Map<String, dynamic>>>? _subscription;
+
   @override
   Future<List<ContractModel>> build() async {
+    _initRealtimeStream();
     return _loadContracts();
+  }
+
+  void _initRealtimeStream() {
+    _subscription?.cancel();
+    try {
+      final client = Supabase.instance.client;
+
+      _subscription = client
+          .from('contracts')
+          .stream(primaryKey: ['id'])
+          .order('created_at', ascending: false)
+          .listen(
+            (data) {
+          final contracts =
+          data.map((map) => ContractModel.fromMap(map)).toList();
+          state = AsyncValue.data(contracts);
+        },
+        onError: (error, stack) {
+          debugPrint('⚠️ [Realtime Contracts Error]: $error');
+        },
+      );
+    } catch (e) {
+      debugPrint('⚠️ [Subscription Init Error]: $e');
+    }
+
+    ref.onDispose(() {
+      _subscription?.cancel();
+    });
   }
 
   Future<List<ContractModel>> _loadContracts() async {
@@ -19,7 +63,7 @@ class ContractsNotifier extends AsyncNotifier<List<ContractModel>> {
   }
 
   Future<void> refreshContracts() async {
-    state = const AsyncLoading();
+    state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async => _loadContracts());
   }
 
@@ -60,83 +104,61 @@ class ContractsNotifier extends AsyncNotifier<List<ContractModel>> {
     return contracts.any((contract) => contract.jobId == jobId);
   }
 
+  Future<List<ContractTimelineModel>> getTimeline(String contractId) {
+    return ref.read(contractRepositoryProvider).getTimeline(contractId);
+  }
+
+  Future<List<ContractDeliveryModel>> getDeliveries(String contractId) {
+    return ref.read(contractRepositoryProvider).getDeliveries(contractId);
+  }
+
   Future<void> addContract(ContractModel contract) async {
-    final repository = ref.read(contractRepositoryProvider);
+    await ref.read(contractRepositoryProvider).addContract(contract);
+    await refreshContracts();
+  }
 
-    state = await AsyncValue.guard(() async {
-      await repository.addContract(contract);
-      return _loadContracts();
-    });
+  Future<void> updateContractStatus(String contractId, ContractStatus status) async {
+    await ref.read(contractRepositoryProvider).updateContractStatus(contractId, status);
+    await refreshContracts();
+  }
 
-    NotificationHelper.send(
-      ref: ref,
-      userId: contract.freelancerId,
-      title: 'Yeni sözleşme oluşturuldu',
-      body: '${contract.jobTitle} işi için sözleşme oluşturuldu.',
-      type: AppNotificationType.contractCreated,
-      relatedId: contract.id,
+  Future<void> updatePaymentStatus(String contractId, PaymentStatus status) async {
+    await ref.read(contractRepositoryProvider).updatePaymentStatus(contractId, status);
+    await refreshContracts();
+  }
+
+  Future<void> submitDelivery({
+    required String contractId,
+    required String message,
+    String? fileUrl,
+  }) async {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id ?? '';
+    await ref.read(contractRepositoryProvider).submitDelivery(
+      contractId: contractId,
+      actorId: currentUserId,
+      message: message,
+      fileUrl: fileUrl,
     );
+    await refreshContracts();
   }
 
-  Future<void> updateContractStatus(
-      String contractId,
-      ContractStatus status,
-      ) async {
-    final repository = ref.read(contractRepositoryProvider);
-    final contract = getById(contractId);
-
-    state = await AsyncValue.guard(() async {
-      await repository.updateContractStatus(contractId, status);
-      return _loadContracts();
-    });
-
-    if (contract == null) return;
-
-    if (status == ContractStatus.delivered) {
-      NotificationHelper.send(
-        ref: ref,
-        userId: contract.employerId,
-        title: 'İş teslim edildi',
-        body: '${contract.jobTitle} işi freelancer tarafından teslim edildi.',
-        type: AppNotificationType.workSubmitted,
-        relatedId: contract.id,
-      );
-    }
-
-    if (status == ContractStatus.completed) {
-      NotificationHelper.send(
-        ref: ref,
-        userId: contract.freelancerId,
-        title: 'Proje tamamlandı',
-        body: '${contract.jobTitle} işi tamamlandı olarak işaretlendi.',
-        type: AppNotificationType.contractCompleted,
-        relatedId: contract.id,
-      );
-    }
-  }
-  Future<void> fundContract(String contractId) async {
-    final repository = ref.read(contractRepositoryProvider);
-
-    state = await AsyncValue.guard(() async {
-      await repository.updatePaymentStatus(contractId, PaymentStatus.funded);
-      return _loadContracts();
-    });
+  Future<void> requestRevision({
+    required String contractId,
+    required String reason,
+  }) async {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id ?? '';
+    await ref.read(contractRepositoryProvider).requestRevision(
+      contractId: contractId,
+      actorId: currentUserId,
+      reason: reason,
+    );
+    await refreshContracts();
   }
 
-  Future<void> releasePayment(String contractId) async {
-    final repository = ref.read(contractRepositoryProvider);
-
-    state = await AsyncValue.guard(() async {
-      await repository.updatePaymentStatus(contractId, PaymentStatus.released);
-      return _loadContracts();
-    });
-  }
-  Future<void> deliverContract(String contractId) async {
-    await updateContractStatus(contractId, ContractStatus.delivered);
-  }
-
-  Future<void> completeContract(String contractId) async {
-    await updateContractStatus(contractId, ContractStatus.completed);
+  Future<void> approveAndReleasePayment(String contractId) async {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id ?? '';
+    await ref.read(contractRepositoryProvider).releasePayment(contractId, currentUserId);
+    await refreshContracts();
   }
 }
 

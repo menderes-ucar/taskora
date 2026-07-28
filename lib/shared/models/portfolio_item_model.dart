@@ -1,3 +1,4 @@
+// shared/models/portfolio_item_model.dart içinde olması gereken yapı:
 class PortfolioItemModel {
   final String id;
   final String freelancerId;
@@ -5,37 +6,39 @@ class PortfolioItemModel {
   final String category;
   final String description;
   final List<String> imageUrls;
-  final DateTime createdAt;
+  final String status; // 'pending', 'approved', 'rejected'
 
-  PortfolioItemModel({
+  const PortfolioItemModel({
     required this.id,
     required this.freelancerId,
     required this.title,
     required this.category,
     required this.description,
-    this.imageUrls = const [],
-    DateTime? createdAt,
-  }) : createdAt = createdAt ?? DateTime.now();
+    required this.imageUrls,
+    this.status = 'pending', // Yeni eklenen portföyler varsayılan olarak onay bekler
+  });
 
-  String? get imageUrl => imageUrls.isNotEmpty ? imageUrls.first : null;
-
-  PortfolioItemModel copyWith({
-    String? id,
-    String? freelancerId,
-    String? title,
-    String? category,
-    String? description,
-    List<String>? imageUrls,
-    DateTime? createdAt,
-  }) {
+  factory PortfolioItemModel.fromMap(Map<String, dynamic> map) {
     return PortfolioItemModel(
-      id: id ?? this.id,
-      freelancerId: freelancerId ?? this.freelancerId,
-      title: title ?? this.title,
-      category: category ?? this.category,
-      description: description ?? this.description,
-      imageUrls: imageUrls ?? this.imageUrls,
-      createdAt: createdAt ?? this.createdAt,
+      id: map['id'] ?? '',
+      freelancerId: map['freelancer_id'] ?? '',
+      title: map['title'] ?? '',
+      category: map['category'] ?? '',
+      description: map['description'] ?? '',
+      imageUrls: List<String>.from(map['image_urls'] ?? const []),
+      status: map['status'] ?? 'pending',
     );
+  }
+
+  Map<String, dynamic> toInsertMap() {
+    return {
+      'id': id,
+      'freelancer_id': freelancerId,
+      'title': title,
+      'category': category,
+      'description': description,
+      'image_urls': imageUrls,
+      'status': status, // Veritabanına onay bekliyor olarak yazılır
+    };
   }
 }

@@ -1,30 +1,51 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../../shared/data/mock_data.dart';
 import '../../../../../shared/models/portfolio_item_model.dart';
+import '../data/portfolio_repository_provider.dart';
 
-class PortfolioNotifier extends StateNotifier<List<PortfolioItemModel>> {
-  PortfolioNotifier() : super(List<PortfolioItemModel>.from(MockData.portfolio));
+class PortfolioNotifier
+    extends AsyncNotifier<List<PortfolioItemModel>> {
 
-  List<PortfolioItemModel> getByFreelancer(String freelancerId) {
-    final items = state
-        .where((item) => item.freelancerId == freelancerId)
-        .toList();
-
-    items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return items;
+  @override
+  Future<List<PortfolioItemModel>> build() async {
+    return [];
   }
 
-  void addPortfolioItem(PortfolioItemModel item) {
-    state = [item, ...state];
+  Future<void> load(String freelancerId) async {
+    state = const AsyncLoading();
+
+    state = await AsyncValue.guard(() async {
+      return ref
+          .read(portfolioRepositoryProvider)
+          .getByFreelancer(freelancerId);
+    });
   }
 
-  void removePortfolioItem(String id) {
-    state = state.where((item) => item.id != id).toList();
+  Future<void> addPortfolioItem(
+      PortfolioItemModel item,
+      ) async {
+    final repo = ref.read(portfolioRepositoryProvider);
+
+    await repo.addPortfolioItem(item);
+
+    await load(item.freelancerId);
+  }
+
+  Future<void> removePortfolioItem(
+      String id,
+      String freelancerId,
+      ) async {
+    final repo = ref.read(portfolioRepositoryProvider);
+
+    await repo.removePortfolioItem(id);
+
+    await load(freelancerId);
   }
 }
 
 final portfolioProvider =
-StateNotifierProvider<PortfolioNotifier, List<PortfolioItemModel>>(
-      (ref) => PortfolioNotifier(),
+AsyncNotifierProvider<
+    PortfolioNotifier,
+    List<PortfolioItemModel>>(
+  PortfolioNotifier.new,
 );

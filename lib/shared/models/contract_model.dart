@@ -14,6 +14,9 @@ class ContractModel {
   final DateTime createdAt;
   final PaymentStatus paymentStatus;
 
+  final bool employerRated;
+  final bool freelancerRated;
+
   const ContractModel({
     required this.id,
     required this.jobId,
@@ -26,6 +29,8 @@ class ContractModel {
     required this.status,
     required this.createdAt,
     required this.paymentStatus,
+    this.employerRated = false,
+    this.freelancerRated = false,
   });
 
   ContractModel copyWith({
@@ -40,6 +45,8 @@ class ContractModel {
     ContractStatus? status,
     DateTime? createdAt,
     PaymentStatus? paymentStatus,
+    bool? employerRated,
+    bool? freelancerRated,
   }) {
     return ContractModel(
       id: id ?? this.id,
@@ -53,28 +60,31 @@ class ContractModel {
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       paymentStatus: paymentStatus ?? this.paymentStatus,
+      employerRated: employerRated ?? this.employerRated,
+      freelancerRated: freelancerRated ?? this.freelancerRated,
     );
   }
 
   factory ContractModel.fromMap(Map<String, dynamic> map) {
     return ContractModel(
-      id: map['id'] as String,
-      jobId: map['job_id'] as String,
-      jobTitle: map['job_title'] as String,
-      employerId: map['employer_id'] as String,
-      freelancerId: map['freelancer_id'] as String,
-      freelancerName: map['freelancer_name'] as String,
-      agreedAmount: (map['agreed_amount'] as num).toDouble(),
-      deliveryDays: map['delivery_days'] as int,
-      status: ContractStatus.values.firstWhere(
-            (e) => e.name == map['status'],
-        orElse: () => ContractStatus.active,
-      ),
-      createdAt: DateTime.parse(map['created_at'] as String),
+      id: (map['id'] ?? '').toString(),
+      jobId: (map['job_id'] ?? '').toString(),
+      jobTitle: (map['job_title'] ?? 'İlan').toString(),
+      employerId: (map['employer_id'] ?? '').toString(),
+      freelancerId: (map['freelancer_id'] ?? '').toString(),
+      freelancerName: (map['freelancer_name'] ?? 'Freelancer').toString(),
+      agreedAmount: (map['agreed_amount'] as num?)?.toDouble() ?? 0.0,
+      deliveryDays: (map['delivery_days'] as int?) ?? 1,
+      status: ContractStatusX.fromString(map['status']?.toString()),
+      createdAt: map['created_at'] != null
+          ? DateTime.tryParse(map['created_at'].toString()) ?? DateTime.now()
+          : DateTime.now(),
       paymentStatus: PaymentStatus.values.firstWhere(
             (e) => e.name == map['payment_status'],
         orElse: () => PaymentStatus.pending,
       ),
+      employerRated: map['employer_rated'] as bool? ?? false,
+      freelancerRated: map['freelancer_rated'] as bool? ?? false,
     );
   }
 
@@ -91,6 +101,8 @@ class ContractModel {
       'status': status.name,
       'created_at': createdAt.toIso8601String(),
       'payment_status': paymentStatus.name,
+      'employer_rated': employerRated,
+      'freelancer_rated': freelancerRated,
     };
   }
 
@@ -105,6 +117,8 @@ class ContractModel {
       'delivery_days': deliveryDays,
       'status': status.name,
       'payment_status': paymentStatus.name,
+      'employer_rated': employerRated,
+      'freelancer_rated': freelancerRated,
     };
   }
 }

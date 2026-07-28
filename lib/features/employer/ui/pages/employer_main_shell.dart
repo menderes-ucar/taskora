@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:flutter_riverpod/flutter_riverpod.dart' hide Provider;
 import '../../../../app/theme/app_colors.dart';
-import '../../../auth/presentation/providers/auth_provider.dart';
-import '../../../freelancer/messages/ui/pages/messages_list_page.dart';
+import '../../../auth/presentation/providers/auth_state.dart';
+import '../../../jobs/presentation/pages/my_pages_job.dart';
+
+import '../../../messages/presentation/pages/messages_list_page.dart';
 import '../../home/ui/pages/employer_home_page.dart';
-import '../../jobs/ui/pages/my_jobs_page.dart';
 import '../../profile/ui/pages/employer_profile_page.dart';
 
 class EmployerMainShell extends ConsumerStatefulWidget {
@@ -31,59 +31,59 @@ class _EmployerMainShellState extends ConsumerState<EmployerMainShell> {
 
     return Scaffold(
       body: pages[currentIndex],
-        bottomNavigationBar: NavigationBarTheme(
-          data: NavigationBarThemeData(
-            backgroundColor: AppColors.black,
-            indicatorColor: AppColors.primary.withOpacity(0.2),
+      bottomNavigationBar: NavigationBarTheme(
+        data: NavigationBarThemeData(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          indicatorColor: AppColors.primary.withValues(alpha: 0.18),
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            final selected = states.contains(WidgetState.selected);
 
-            // 🔥 yazılar
-            labelTextStyle: WidgetStateProperty.resolveWith((states) {
-              final selected = states.contains(WidgetState.selected);
-              return TextStyle(
-                color: Colors.white,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
-                fontSize: 12,
-              );
-            }),
+            return TextStyle(
+              color: selected ? AppColors.primaryDark : AppColors.grey,
+              fontWeight: selected ? FontWeight.w900 : FontWeight.w600,
+              fontSize: 12,
+            );
+          }),
+          iconTheme: WidgetStateProperty.resolveWith((states) {
+            final selected = states.contains(WidgetState.selected);
 
-            // 🔥 iconlar
-            iconTheme: WidgetStateProperty.resolveWith((states) {
-              final selected = states.contains(WidgetState.selected);
-              return IconThemeData(
-                color: selected ? Colors.white : Colors.white70,
-              );
-            }),
-          ),
-
-          child: NavigationBar(
-            selectedIndex: currentIndex,
-            onDestinationSelected: (index) {
-              setState(() => currentIndex = index);
-            },
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.home_outlined),
-                selectedIcon: Icon(Icons.home),
-                label: 'Ana Sayfa',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.campaign_outlined),
-                selectedIcon: Icon(Icons.campaign),
-                label: 'İlanlarım',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.chat_bubble_outline),
-                selectedIcon: Icon(Icons.chat_bubble),
-                label: 'Mesajlar',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.person_outline),
-                selectedIcon: Icon(Icons.person),
-                label: 'Profil',
-              ),
-            ],
-          ),
+            return IconThemeData(
+              color: selected ? AppColors.primaryDark : AppColors.grey,
+              size: 22,
+            );
+          }),
         ),
+        child: NavigationBar(
+          height: 72,
+          selectedIndex: currentIndex,
+          onDestinationSelected: (index) {
+            setState(() => currentIndex = index);
+          },
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home_rounded),
+              label: 'Ana Sayfa',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.campaign_outlined),
+              selectedIcon: Icon(Icons.campaign_rounded),
+              label: 'İlanlarım',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.chat_bubble_outline_rounded),
+              selectedIcon: Icon(Icons.chat_bubble_rounded),
+              label: 'Mesajlar',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline_rounded),
+              selectedIcon: Icon(Icons.person_rounded),
+              label: 'Profil',
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

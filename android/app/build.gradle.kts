@@ -1,5 +1,9 @@
 plugins {
     id("com.android.application")
+    // START: FlutterFire Configuration
+    id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
+    // END: FlutterFire Configuration
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
@@ -11,6 +15,8 @@ android {
     ndkVersion = "27.0.12077973"
 
     compileOptions {
+        // Desugaring altyapısını Kotlin DSL standardında aktif ettik kanka
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
@@ -41,4 +47,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+// Desugaring için gerekli olan Java 8+ API kütüphanesini buraya bağladık
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }

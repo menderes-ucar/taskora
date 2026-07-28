@@ -10,6 +10,8 @@ class ProposalModel {
   final String coverLetter;
   final ProposalStatus status;
   final DateTime createdAt;
+  final int coinCost; // 🚀 EKLENDİ: Teklif için harcanan coin
+  final bool coinRefunded; // 🚀 EKLENDİ: Coin iade edildi mi
 
   const ProposalModel({
     required this.id,
@@ -21,6 +23,8 @@ class ProposalModel {
     required this.coverLetter,
     required this.status,
     required this.createdAt,
+    this.coinCost = 0, // 🚀 EKLENDİ
+    this.coinRefunded = false, // 🚀 EKLENDİ
   });
 
   ProposalModel copyWith({
@@ -33,6 +37,8 @@ class ProposalModel {
     String? coverLetter,
     ProposalStatus? status,
     DateTime? createdAt,
+    int? coinCost, // 🚀 EKLENDİ
+    bool? coinRefunded, // 🚀 EKLENDİ
   }) {
     return ProposalModel(
       id: id ?? this.id,
@@ -44,6 +50,8 @@ class ProposalModel {
       coverLetter: coverLetter ?? this.coverLetter,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
+      coinCost: coinCost ?? this.coinCost, // 🚀 EKLENDİ
+      coinRefunded: coinRefunded ?? this.coinRefunded, // 🚀 EKLENDİ
     );
   }
 
@@ -61,6 +69,8 @@ class ProposalModel {
         orElse: () => ProposalStatus.pending,
       ),
       createdAt: DateTime.parse(map['created_at'] as String),
+      coinCost: (map['coin_cost'] as num?)?.toInt() ?? 0, // 🚀 EKLENDİ
+      coinRefunded: map['coin_refunded'] as bool? ?? false, // 🚀 EKLENDİ
     );
   }
 
@@ -75,6 +85,8 @@ class ProposalModel {
       'cover_letter': coverLetter,
       'status': status.name,
       'created_at': createdAt.toIso8601String(),
+      'coin_cost': coinCost, // 🚀 EKLENDİ
+      'coin_refunded': coinRefunded, // 🚀 EKLENDİ
     };
   }
 
@@ -87,6 +99,11 @@ class ProposalModel {
       'delivery_days': deliveryDays,
       'cover_letter': coverLetter,
       'status': status.name,
+      'coin_cost': coinCost, // 🚀 EKLENDİ
+      'coin_refunded': coinRefunded, // 🚀 EKLENDİ
     };
   }
+  factory ProposalModel.fromJson(Map<String, dynamic> json) => ProposalModel.fromMap(json);
+
+  Map<String, dynamic> toJson() => toMap();
 }

@@ -18,6 +18,8 @@ class MessageModel {
   final String? proposalDescription;
   final String? proposalStatus;
 
+  final bool isFirstMessage; // 🚀 EKLENDİ: Sohbetin ilk mesajı mı (coin harcandı)
+
   const MessageModel({
     required this.id,
     required this.conversationId,
@@ -31,6 +33,7 @@ class MessageModel {
     this.proposalDeliveryDays,
     this.proposalDescription,
     this.proposalStatus,
+    this.isFirstMessage = false, // 🚀 EKLENDİ
   });
 
   bool get isTextMessage => type == MessageType.text;
@@ -49,6 +52,7 @@ class MessageModel {
     int? proposalDeliveryDays,
     String? proposalDescription,
     String? proposalStatus,
+    bool? isFirstMessage, // 🚀 EKLENDİ
     bool clearProposalId = false,
     bool clearProposalAmount = false,
     bool clearProposalDeliveryDays = false,
@@ -76,6 +80,7 @@ class MessageModel {
       proposalStatus: clearProposalStatus
           ? null
           : (proposalStatus ?? this.proposalStatus),
+      isFirstMessage: isFirstMessage ?? this.isFirstMessage, // 🚀 EKLENDİ
     );
   }
 
@@ -99,6 +104,7 @@ class MessageModel {
           : (map['proposal_delivery_days'] as num).toInt(),
       proposalDescription: map['proposal_description']?.toString(),
       proposalStatus: map['proposal_status']?.toString(),
+      isFirstMessage: map['is_first_message'] as bool? ?? false, // 🚀 EKLENDİ
     );
   }
 
@@ -116,6 +122,10 @@ class MessageModel {
       'proposal_delivery_days': proposalDeliveryDays,
       'proposal_description': proposalDescription,
       'proposal_status': proposalStatus,
+      'is_first_message': isFirstMessage, // 🚀 EKLENDİ
     };
   }
+  factory MessageModel.fromJson(Map<String, dynamic> json) => MessageModel.fromMap(json);
+
+  Map<String, dynamic> toJson() => toMap();
 }

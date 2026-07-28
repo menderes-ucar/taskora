@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../../app/router/route_names.dart';
 import '../../../../../app/theme/app_colors.dart';
-import '../../../../../core/widgets/app_dashboard_widgets.dart';
+import '../../../../../shared/enums/proposal_status.dart';
 import '../../../../../shared/models/job_model.dart';
-import '../../../../../shared/models/proposal_model.dart';
-import '../../../../auth/presentation/providers/auth_provider.dart';
-import '../../../../employer/contracts/logic/contracts_provider.dart';
-import '../../../../employer/jobs/ui/pages/job_list_page.dart';
-import '../../../contracts/ui/pages/my_active_jobs_page.dart';
-import '../../../jobs/ui/logic/jobs_provider.dart';
-import '../../../notification/ui/widgets/notification_bell_button.dart';
-import '../../../proposals/logic/proposals_provider.dart';
+import '../../../../auth/presentation/providers/auth_state.dart';
+import '../../../../contracts/logic/contracts_provider.dart';
+import '../../../../contracts/presentation/pages/my_active_jobs_page.dart';
+import '../../../../jobs/domain/providers/job_provider.dart';
+import '../../../../jobs/presentation/pages/job_categories_page.dart';
+import '../../../../notification/presentation/widgets/notification_bell_button.dart';
+import '../../../proposals/providers/proposals_provider.dart';
 import '../../../proposals/ui/pages/my_proposals_page.dart';
 
 class FreelancerHomePage extends ConsumerWidget {
@@ -22,445 +22,392 @@ class FreelancerHomePage extends ConsumerWidget {
     required this.userName,
   });
 
+  Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('Çıkış Yap',
+            style: TextStyle(
+                color: AppColors.black, fontWeight: FontWeight.bold)),
+        content:
+        const Text('Hesabınızdan çıkış yapmak istediğinize emin misiniz?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('İptal', style: TextStyle(color: AppColors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(context, true),
+            child:
+            const Text('Çıkış Yap', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await ref.read(authProvider.notifier).logout();
+      if (context.mounted) {
+        Navigator.pushNamedAndRemoveUntil(
+            context, RouteNames.login, (_) => false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUser = ref.watch(authProvider).user;
-    final jobsAsync = ref.watch(openJobsProvider);
+
+    // 🚀 ZAMAN AŞIMINA SEBEP OLAN ref.listen DÖNGÜLERİ KALDIRILDI!
+
+    final List<JobModel> jobs = ref.watch(openJobsProvider);
     final proposalsAsync = ref.watch(proposalsProvider);
-    final contracts = ref.watch(contractsProvider);
+    final contractsAsync = ref.watch(contractsProvider);
 
-    return jobsAsync.when(
-      data: (jobs) {
-        return proposalsAsync.when(
-          data: (proposals) {
-            final myProposals = currentUser == null
-                ? 0
-                : proposals
-                .where((p) => p.freelancerId == currentUser.id)
-                .length;
+    if (currentUser == null) {
+      return const Scaffold(
+        backgroundColor: AppColors.primary,
+        body: Center(
+          child: Text('Kullanıcı bulunamadı',
+              style:
+              TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+        ),
+      );
+    }
 
-            final acceptedJobs = currentUser == null
-                ? 0
-                : proposals
-                .where(
-                  (p) =>
-              p.freelancerId == currentUser.id &&
-                  p.status.name == 'accepted',
-            )
-                .length;
+    return proposalsAsync.when(
+      data: (proposals) => contractsAsync.when(
+        data: (contracts) {
+          final myProposals = proposals
+              .where((p) => p.freelancerId == currentUser.id)
+              .length;
 
-            final activeContracts = currentUser == null
-                ? 0
-                : contracts
-                .where(
-                  (c) =>
-              c.freelancerId == currentUser.id &&
-                  c.status.name != 'completed',
-            )
-                .length;
+          final acceptedJobs = proposals
+              .where(
+                (p) =>
+            p.freelancerId == currentUser.id &&
+                (p.status == ProposalStatus.accepted ||
+                    p.status.name == 'accepted'),
+          )
+              .length;
 
-            final recentJobs = jobs.take(3).toList();
+          final activeContracts = contracts.where((c) {
+            if (c.freelancerId != currentUser.id) return false;
+            final statusName = c.status.name.toLowerCase();
+            return statusName != 'completed' &&
+                statusName != 'cancelled' &&
+                statusName != 'rejected';
+          }).length;
 
-            return Scaffold(
+          return Scaffold(
+            backgroundColor: AppColors.primary,
+            appBar: AppBar(
               backgroundColor: AppColors.primary,
-              appBar: AppBar(
-                backgroundColor: AppColors.primary,
-                elevation: 0,
-                scrolledUnderElevation: 0,
-                title: const Text(
-                  'Freelancer',
-                  style: TextStyle(color: Colors.white),
-                ),
-                actions: const [
-                  NotificationBellButton(),
+              elevation: 0,
+              titleSpacing: 16,
+              title: const Row(
+                children: [
+                  Icon(Icons.person_pin_rounded, color: Colors.white, size: 22),
+                  SizedBox(width: 12),
+                  Text(
+                    'Freelancer Panel',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ],
               ),
-              body: Container(
-                width: double.infinity,
-                height: double.infinity,
-                decoration: const BoxDecoration(),
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    _FreelancerHero(
-                      userName: userName,
-                      jobCount: jobs.length,
-                      proposalCount: myProposals,
-                      activeContracts: activeContracts,
+              actions: [
+                const NotificationBellButton(),
+                IconButton(
+                  tooltip: 'Çıkış Yap',
+                  icon: const Icon(Icons.logout_rounded, color: Colors.white),
+                  onPressed: () => _handleLogout(context, ref),
+                ),
+                const SizedBox(width: 8),
+              ],
+            ),
+            body: RefreshIndicator(
+              color: AppColors.primaryDark,
+              backgroundColor: Colors.white,
+              onRefresh: () async {
+                ref.invalidate(proposalsProvider);
+                ref.invalidate(contractsProvider);
+                ref.invalidate(jobsProvider);
+              },
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(28),
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color(0xFF0E2238),
+                          Color(0xFF103847),
+                          Color(0xFF0BA99C),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.black.withValues(alpha: 0.15),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 20),
-                    Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: AppSummaryCard(
-                            title: 'İlanlar',
-                            value: '${jobs.length}',
-                            icon: Icons.work_outline,
+                        Text(
+                          'Merhaba $userName 👋',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 20,
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: AppSummaryCard(
-                            title: 'Teklifler',
-                            value: '$myProposals',
-                            icon: Icons.send_outlined,
+                        const SizedBox(height: 6),
+                        Text(
+                          '${jobs.length} yeni ilan yayınlandı • $myProposals aktif teklif',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    AppWideSummaryCard(
-                      title: 'Aktif İşler',
-                      value: '$activeContracts',
-                      subtitle: 'Devam eden işler',
-                      icon: Icons.task_alt,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const MyActiveJobsPage(),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    AppWideSummaryCard(
-                      title: 'Kabul Edilen',
-                      value: '$acceptedJobs',
-                      subtitle: 'Onaylanan tekliflerin',
-                      icon: Icons.verified_rounded,
-                      accentColor: AppColors.success,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const MyProposalsPage(),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                    const AppSectionHeader(
-                      title: 'Hızlı İşlemler',
-                      subtitle: 'Tek dokunuşla ilerle',
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: AppActionCard(
-                            icon: Icons.search,
-                            title: 'İş Bul',
-                            subtitle: 'Yeni ilanlara bak',
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const JobsListPage(),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: AppActionCard(
-                            icon: Icons.description,
-                            title: 'Tekliflerim',
-                            subtitle: 'Durumunu kontrol et',
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const MyProposalsPage(),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    AppWideActionCard(
-                      icon: Icons.task_outlined,
-                      title: 'Aktif İşlerim',
-                      subtitle: 'Devam eden işlerini görüntüle',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const MyActiveJobsPage(),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                    const AppSectionHeader(
-                      title: 'Senin İçin İşler',
-                      subtitle: 'Öne çıkan ilanlar',
-                    ),
-                    const SizedBox(height: 12),
-                    if (recentJobs.isEmpty)
-                      const _EmptyMiniCard(
-                        title: 'İlan yok',
-                        subtitle: 'Yeni ilanlar yakında',
-                      )
-                    else
-                      ...recentJobs.map(
-                            (job) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _FeaturedJobCard(job: job),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildGridStat(
+                          'İlan Havuzu',
+                          '${jobs.length}',
+                          Icons.work_outline_rounded,
+                          AppColors.primaryDark,
                         ),
                       ),
-                  ],
-                ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: _buildGridStat(
+                          'Tekliflerim',
+                          '$myProposals',
+                          Icons.send_rounded,
+                          AppColors.warning,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const MyActiveJobsPage(),
+                            ),
+                          ),
+                          child: _buildGridStat(
+                            'Aktif İşler',
+                            '$activeContracts',
+                            Icons.task_alt_rounded,
+                            AppColors.success,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: _buildGridStat(
+                          'Kabul Edilen',
+                          '$acceptedJobs',
+                          Icons.verified_rounded,
+                          AppColors.primaryDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+                  const Text(
+                    'Hızlı İşlemler',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildActionTile(
+                    Icons.search_rounded,
+                    'İş Bul',
+                    'Kategorilere göre ilanlara göz at',
+                        () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const JobCategoriesPage(),
+                      ),
+                    ),
+                  ),
+                  _buildActionTile(
+                    Icons.description_outlined,
+                    'Tekliflerim',
+                    'Durumları kontrol et',
+                        () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const MyProposalsPage(),
+                      ),
+                    ),
+                  ),
+                  _buildActionTile(
+                    Icons.task_alt_rounded,
+                    'Aktif İşlerim',
+                    'Süreçleri takip et',
+                        () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const MyActiveJobsPage(),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            );
-          },
-          loading: () => const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        },
+        loading: () => const Scaffold(
+          backgroundColor: AppColors.primary,
+          body: Center(
+            child: CircularProgressIndicator(color: Colors.white),
           ),
-          error: (error, stack) => Scaffold(
-            body: Center(child: Text('Hata: $error')),
+        ),
+        error: (err, _) => Scaffold(
+          backgroundColor: AppColors.primary,
+          body: Center(
+            child: Text(
+              'Bağlantı yenileniyor... ($err)',
+              style: const TextStyle(color: Colors.white),
+            ),
           ),
-        );
-      },
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        ),
       ),
-      error: (error, stack) => Scaffold(
-        body: Center(child: Text('Hata: $error')),
+      loading: () => const Scaffold(
+        backgroundColor: AppColors.primary,
+        body: Center(
+          child: CircularProgressIndicator(color: Colors.white),
+        ),
+      ),
+      error: (err, _) => Scaffold(
+        backgroundColor: AppColors.primary,
+        body: Center(
+          child: Text(
+            'Bağlantı yenileniyor... ($err)',
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
       ),
     );
   }
-}
 
-class _FreelancerHero extends StatelessWidget {
-  final String userName;
-  final int jobCount;
-  final int proposalCount;
-  final int activeContracts;
-
-  const _FreelancerHero({
-    required this.userName,
-    required this.jobCount,
-    required this.proposalCount,
-    required this.activeContracts,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildGridStat(String label, String val, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: LinearGradient(
-          colors: [
-            AppColors.primaryDark,
-            AppColors.primary,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.30),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+            color: AppColors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'TASKORA',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 14),
+          Text(
+            val,
+            style: const TextStyle(
               fontSize: 22,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Merhaba $userName',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 20,
               fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Bugün yeni fırsatlar seni bekliyor',
-            style: TextStyle(
-              color: Colors.white70,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              _HeroStat(value: '$jobCount', label: 'İlan'),
-              _HeroStat(value: '$proposalCount', label: 'Teklif'),
-              _HeroStat(value: '$activeContracts', label: 'Aktif'),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroStat extends StatelessWidget {
-  final String value;
-  final String label;
-
-  const _HeroStat({
-    required this.value,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          children: [
-            Text(
-              value,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FeaturedJobCard extends StatelessWidget {
-  final JobModel job;
-
-  const _FeaturedJobCard({
-    required this.job,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.10),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(
-              Icons.work_outline_rounded,
-              color: AppColors.primaryDark,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  job.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.black,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  job.category,
-                  style: const TextStyle(
-                    color: AppColors.grey,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            '₺${job.budget.toStringAsFixed(0)}',
-            style: const TextStyle(
-              fontWeight: FontWeight.w900,
-              color: AppColors.primaryDark,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyMiniCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-
-  const _EmptyMiniCard({
-    required this.title,
-    required this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
               color: AppColors.black,
             ),
           ),
-          const SizedBox(height: 6),
           Text(
-            subtitle,
+            label,
             style: const TextStyle(
               color: AppColors.grey,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildActionTile(
+      IconData icon, String title, String sub, VoidCallback onTap) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: AppColors.primaryDark.withValues(alpha: 0.20),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ListTile(
+        onTap: onTap,
+        contentPadding:
+        const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+        leading: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(13),
+          ),
+          child: Icon(icon, color: AppColors.primaryDark),
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.w900,
+            color: AppColors.black,
+          ),
+        ),
+        subtitle: Text(
+          sub,
+          style: const TextStyle(color: AppColors.grey, fontSize: 12),
+        ),
+        trailing: const Icon(
+          Icons.chevron_right_rounded,
+          color: AppColors.primaryDark,
+        ),
       ),
     );
   }

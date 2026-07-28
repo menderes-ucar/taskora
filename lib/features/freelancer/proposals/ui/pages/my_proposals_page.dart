@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' hide Provider;
 
 import '../../../../../app/theme/app_colors.dart';
 import '../../../../../core/widgets/app_chip.dart';
 import '../../../../../core/widgets/empty_state.dart';
 import '../../../../../shared/enums/proposal_status.dart';
 import '../../../../../shared/models/proposal_model.dart';
-import '../../../../auth/presentation/providers/auth_provider.dart';
-import '../../../../freelancer/jobs/ui/logic/jobs_provider.dart';
-import '../../logic/proposals_provider.dart';
+import '../../../../auth/presentation/providers/auth_state.dart';
+import '../../../../jobs/domain/providers/job_provider.dart';
+import '../../providers/proposals_provider.dart';
 
 class MyProposalsPage extends ConsumerWidget {
   const MyProposalsPage({super.key});
@@ -29,56 +29,61 @@ class MyProposalsPage extends ConsumerWidget {
           ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
         return Scaffold(
+          backgroundColor: AppColors.primary,
           appBar: AppBar(
-            title: const Text('Tekliflerim'),
+            backgroundColor: AppColors.primary,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            title: const Text(
+              'Tekliflerim',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
           body: myProposals.isEmpty
               ? const EmptyState(
-            icon: Icons.send_outlined,
+            icon: Icons.send_rounded,
             title: 'Henüz teklif göndermedin',
-            subtitle:
-            'İlgini çeken ilanlara teklif verdiğinde burada listelenecek.',
+            subtitle: 'İlgini çeken ilanlara teklif verdiğinde burada listelenecek.',
           )
-              : ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-            children: [
-              _TopSummary(
-                title: 'Gönderilen Teklifler',
-                subtitle:
-                '${myProposals.length} teklifin var. Durumlarını buradan takip edebilirsin.',
-              ),
-              const SizedBox(height: 16),
-              ...List.generate(myProposals.length, (index) {
-                final proposal = myProposals[index];
-                final relatedJob = proposal.jobId.trim().isEmpty
-                    ? null
-                    : jobsNotifier.getById(proposal.jobId);
-
+              : ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+            itemCount: myProposals.length + 1,
+            itemBuilder: (context, index) {
+              if (index == 0) {
                 return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _MyProposalCard(
-                    proposal: proposal,
-                    jobTitle: relatedJob?.title ?? 'İlan',
-                    jobCategory: relatedJob?.category,
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: _TopSummary(
+                    title: 'Gönderilen Teklifler',
+                    subtitle: '${myProposals.length} teklifin var. Durumlarını buradan anlık takip edebilirsin kanka.',
                   ),
                 );
-              }),
-            ],
+              }
+
+              final proposal = myProposals[index - 1];
+              final relatedJob = proposal.jobId.trim().isEmpty ? null : jobsNotifier.getById(proposal.jobId);
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _MyProposalCard(
+                  proposal: proposal,
+                  jobTitle: relatedJob?.title ?? 'İlan Başlığı',
+                  jobCategory: relatedJob?.category,
+                ),
+              );
+            },
           ),
         );
       },
       loading: () => const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
+        backgroundColor: AppColors.primary,
+        body: Center(child: CircularProgressIndicator(color: Colors.white)),
       ),
       error: (error, stack) => Scaffold(
-        appBar: AppBar(
-          title: const Text('Tekliflerim'),
-        ),
-        body: Center(
-          child: Text('Hata: $error'),
-        ),
+        backgroundColor: AppColors.primary,
+        body: Center(child: Text('Hata: $error', style: const TextStyle(color: Colors.white))),
       ),
     );
   }
@@ -97,23 +102,17 @@ class _MyProposalCard extends StatelessWidget {
 
   Color _statusColor() {
     switch (proposal.status) {
-      case ProposalStatus.pending:
-        return AppColors.warning;
-      case ProposalStatus.accepted:
-        return AppColors.success;
-      case ProposalStatus.rejected:
-        return AppColors.danger;
+      case ProposalStatus.pending: return AppColors.warning;
+      case ProposalStatus.accepted: return AppColors.success;
+      case ProposalStatus.rejected: return AppColors.danger;
     }
   }
 
   String _statusText() {
     switch (proposal.status) {
-      case ProposalStatus.pending:
-        return 'Beklemede';
-      case ProposalStatus.accepted:
-        return 'Kabul Edildi';
-      case ProposalStatus.rejected:
-        return 'Reddedildi';
+      case ProposalStatus.pending: return 'Beklemede';
+      case ProposalStatus.accepted: return 'Kabul Edildi';
+      case ProposalStatus.rejected: return 'Reddedildi';
     }
   }
 
@@ -124,14 +123,16 @@ class _MyProposalCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.border),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: AppColors.primaryDark.withValues(alpha: 0.20),
+        ),
         boxShadow: [
           BoxShadow(
-            color: AppColors.black.withOpacity(0.03),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
+            color: AppColors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -139,69 +140,86 @@ class _MyProposalCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
                 child: Text(
                   jobTitle,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.black,
-                  ),
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.black),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              AppChip(
-                label: _statusText(),
-                color: statusColor.withValues(alpha: 0.12),
-                textColor: statusColor,
-                fontWeight: FontWeight.w800,
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Text(
+                  _statusText(),
+                  style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Row(
             children: [
               if (jobCategory != null) ...[
-                AppChip(label: jobCategory!),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Text(jobCategory!, style: const TextStyle(color: AppColors.primaryDark, fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
                 const SizedBox(width: 8),
               ],
-              AppChip(label: '${proposal.deliveryDays} gün'),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Text('${proposal.deliveryDays} gün süre', style: const TextStyle(color: AppColors.primaryDark, fontSize: 12, fontWeight: FontWeight.bold)),
+              ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AppColors.lightGrey,
-              borderRadius: BorderRadius.circular(16),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.primaryDark.withValues(alpha: 0.15),
+              ),
             ),
             child: Text(
               proposal.coverLetter,
-              maxLines: 4,
+              maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppColors.grey,
-                height: 1.5,
-                fontWeight: FontWeight.w500,
-              ),
+              style: const TextStyle(color: AppColors.grey, height: 1.45, fontSize: 13, fontWeight: FontWeight.w500),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const _MetricLabel(
-                title: 'Teklif Tutarı',
-                icon: Icons.payments_outlined,
+              const Row(
+                children: [
+                  Icon(Icons.payments_outlined, size: 18, color: AppColors.grey),
+                  SizedBox(width: 6),
+                  Text('Teklif Tutarı', style: TextStyle(color: AppColors.grey, fontWeight: FontWeight.bold, fontSize: 13)),
+                ],
               ),
-              const Spacer(),
               Text(
                 '₺${proposal.amount.toStringAsFixed(0)}',
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.primaryDark,
-                ),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.success),
               ),
             ],
           ),
@@ -215,69 +233,40 @@ class _TopSummary extends StatelessWidget {
   final String title;
   final String subtitle;
 
-  const _TopSummary({
-    required this.title,
-    required this.subtitle,
-  });
+  const _TopSummary({required this.title, required this.subtitle});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(28),
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF0E2238),
+            Color(0xFF103847),
+            Color(0xFF0BA99C),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.black.withValues(alpha: 0.16),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-              color: AppColors.black,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              color: AppColors.grey,
-              fontWeight: FontWeight.w600,
-              height: 1.4,
-            ),
-          ),
+          Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white)),
+          const SizedBox(height: 8),
+          Text(subtitle, style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w500, height: 1.4, fontSize: 13)),
         ],
       ),
-    );
-  }
-}
-
-class _MetricLabel extends StatelessWidget {
-  final String title;
-  final IconData icon;
-
-  const _MetricLabel({
-    required this.title,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: AppColors.grey),
-        const SizedBox(width: 6),
-        Text(
-          title,
-          style: const TextStyle(
-            color: AppColors.grey,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
     );
   }
 }

@@ -3,6 +3,7 @@ enum TransactionType {
   escrowFunding,
   paymentRelease,
   refund,
+  withdrawal,
 }
 
 extension TransactionTypeX on TransactionType {
@@ -16,6 +17,8 @@ extension TransactionTypeX on TransactionType {
         return 'Ödeme Serbest Bırakma';
       case TransactionType.refund:
         return 'İade';
+      case TransactionType.withdrawal:
+        return 'Para Çekme';
     }
   }
 }

@@ -30,4 +30,7 @@ class WalletModel {
       'balance': balance,
     };
   }
+  factory WalletModel.fromJson(Map<String, dynamic> json) => WalletModel.fromMap(json);
+
+  Map<String, dynamic> toJson() => toMap();
 }

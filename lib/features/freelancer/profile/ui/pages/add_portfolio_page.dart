@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' hide Provider;
 import 'package:uuid/uuid.dart';
 
 import '../../../../../app/theme/app_colors.dart';
 import '../../../../../core/widgets/primary_button.dart';
 import '../../../../../shared/models/portfolio_item_model.dart';
-import '../../../../auth/presentation/providers/auth_provider.dart';
+import '../../../../auth/presentation/providers/auth_state.dart';
 import '../../logic/portfolio_provider.dart';
 
 class AddPortfolioPage extends ConsumerStatefulWidget {
@@ -48,10 +48,10 @@ class _AddPortfolioPageState extends ConsumerState<AddPortfolioPage> {
       image3Controller.text.trim(),
     ].where((e) => e.isNotEmpty).toList();
 
-    // 👇 minimum 1 görsel kontrolü
     if (imageUrls.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
+          backgroundColor: AppColors.danger,
           content: Text('En az 1 görsel eklemelisin'),
         ),
       );
@@ -65,7 +65,6 @@ class _AddPortfolioPageState extends ConsumerState<AddPortfolioPage> {
       category: categoryController.text.trim(),
       description: descriptionController.text.trim(),
       imageUrls: imageUrls,
-      // ❌ createdAt verme artık
     );
 
     ref.read(portfolioProvider.notifier).addPortfolioItem(portfolioItem);
@@ -73,7 +72,8 @@ class _AddPortfolioPageState extends ConsumerState<AddPortfolioPage> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Portföy projesi eklendi'),
+          backgroundColor: AppColors.success,
+          content: Text('Portföy projesi eklendi, onay bekliyor.'),
         ),
       );
       Navigator.pop(context);
@@ -86,25 +86,37 @@ class _AddPortfolioPageState extends ConsumerState<AddPortfolioPage> {
   }) {
     return TextFormField(
       controller: controller,
+      style: const TextStyle(
+        color: AppColors.black,
+        fontWeight: FontWeight.w500,
+      ),
       decoration: InputDecoration(
         hintText: hint,
+        hintStyle: const TextStyle(color: AppColors.grey),
         filled: true,
-        fillColor: AppColors.white,
+        fillColor: Colors.white,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 16,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderSide: BorderSide(
+            color: AppColors.primaryDark.withValues(alpha: 0.20),
+          ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderSide: BorderSide(
+            color: AppColors.primaryDark.withValues(alpha: 0.20),
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: AppColors.primaryDark),
+          borderSide: const BorderSide(
+            color: AppColors.primaryDark,
+            width: 1.5,
+          ),
         ),
       ),
     );
@@ -116,34 +128,49 @@ class _AddPortfolioPageState extends ConsumerState<AddPortfolioPage> {
       backgroundColor: AppColors.primary,
       appBar: AppBar(
         backgroundColor: AppColors.primary,
+        elevation: 0,
         scrolledUnderElevation: 0,
-        title: const Text('Portföy Ekle'),
+        title: const Text(
+          'Portföy Ekle',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
           children: [
             Container(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                gradient: LinearGradient(
+                borderRadius: BorderRadius.circular(28),
+                gradient: const LinearGradient(
                   colors: [
-                    AppColors.primaryDark,
-                    AppColors.primaryDark.withOpacity(0.88),
+                    Color(0xFF0E2238),
+                    Color(0xFF103847),
+                    Color(0xFF0BA99C),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.black.withValues(alpha: 0.16),
+                    blurRadius: 22,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
               ),
-              child: const Row(
+              child: Row(
                 children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        const Text(
                           'Yeni Portföy Projesi',
                           style: TextStyle(
                             fontSize: 22,
@@ -151,11 +178,11 @@ class _AddPortfolioPageState extends ConsumerState<AddPortfolioPage> {
                             color: Colors.white,
                           ),
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
                         Text(
                           'Yaptığın işleri görsellerle birlikte ekleyerek profilini güçlendir.',
                           style: TextStyle(
-                            color: Colors.white70,
+                            color: Colors.white.withValues(alpha: 0.7),
                             height: 1.4,
                             fontWeight: FontWeight.w500,
                           ),
@@ -163,8 +190,8 @@ class _AddPortfolioPageState extends ConsumerState<AddPortfolioPage> {
                       ],
                     ),
                   ),
-                  SizedBox(width: 12),
-                  Icon(
+                  const SizedBox(width: 12),
+                  const Icon(
                     Icons.workspaces_outline,
                     color: Colors.white,
                     size: 34,
@@ -172,49 +199,179 @@ class _AddPortfolioPageState extends ConsumerState<AddPortfolioPage> {
                 ],
               ),
             ),
-            const SizedBox(height: 20),
-            const _SectionTitle('Proje Bilgileri'),
-            const SizedBox(height: 10),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: AppColors.warning.withValues(alpha: 0.40),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.black.withValues(alpha: 0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.gavel_rounded, color: AppColors.warning, size: 22),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '🚨 SaaS Politikası: Eklediğiniz portföy projeleri admin onayından geçtikten sonra işverenlere gösterilecektir kanka.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.black,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Proje Bilgileri',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 12),
             TextFormField(
               controller: titleController,
-              validator: (value) =>
-              value == null || value.trim().isEmpty ? 'Başlık girin' : null,
-              decoration: _inputDecoration('Proje başlığı'),
+              style: const TextStyle(
+                color: AppColors.black,
+                fontWeight: FontWeight.w500,
+              ),
+              validator: (value) => value == null || value.trim().isEmpty ? 'Başlık girin' : null,
+              decoration: InputDecoration(
+                hintText: 'Proje başlığı',
+                hintStyle: const TextStyle(color: AppColors.grey),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide(
+                    color: AppColors.primaryDark.withValues(alpha: 0.20),
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide(
+                    color: AppColors.primaryDark.withValues(alpha: 0.20),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: const BorderSide(
+                    color: AppColors.primaryDark,
+                    width: 1.5,
+                  ),
+                ),
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             TextFormField(
               controller: categoryController,
-              validator: (value) => value == null || value.trim().isEmpty
-                  ? 'Kategori girin'
-                  : null,
-              decoration: _inputDecoration('Kategori'),
+              style: const TextStyle(
+                color: AppColors.black,
+                fontWeight: FontWeight.w500,
+              ),
+              validator: (value) => value == null || value.trim().isEmpty ? 'Kategori girin' : null,
+              decoration: InputDecoration(
+                hintText: 'Kategori',
+                hintStyle: const TextStyle(color: AppColors.grey),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide(
+                    color: AppColors.primaryDark.withValues(alpha: 0.20),
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide(
+                    color: AppColors.primaryDark.withValues(alpha: 0.20),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: const BorderSide(
+                    color: AppColors.primaryDark,
+                    width: 1.5,
+                  ),
+                ),
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             TextFormField(
               controller: descriptionController,
               maxLines: 5,
-              validator: (value) => value == null || value.trim().isEmpty
-                  ? 'Açıklama girin'
-                  : null,
-              decoration: _inputDecoration('Proje açıklaması'),
+              style: const TextStyle(
+                color: AppColors.black,
+                fontWeight: FontWeight.w500,
+              ),
+              validator: (value) => value == null || value.trim().isEmpty ? 'Açıklama girin' : null,
+              decoration: InputDecoration(
+                hintText: 'Proje açıklaması',
+                hintStyle: const TextStyle(color: AppColors.grey),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide(
+                    color: AppColors.primaryDark.withValues(alpha: 0.20),
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide(
+                    color: AppColors.primaryDark.withValues(alpha: 0.20),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: const BorderSide(
+                    color: AppColors.primaryDark,
+                    width: 1.5,
+                  ),
+                ),
+              ),
             ),
-            const SizedBox(height: 20),
-            const _SectionTitle('Proje Görselleri'),
-            const SizedBox(height: 10),
-            _buildImageField(
-              controller: image1Controller,
-              hint: 'Görsel URL 1',
+            const SizedBox(height: 24),
+            const Text(
+              'Proje Görselleri (URL)',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: Colors.white,
+              ),
             ),
             const SizedBox(height: 12),
-            _buildImageField(
-              controller: image2Controller,
-              hint: 'Görsel URL 2',
-            ),
+            _buildImageField(controller: image1Controller, hint: 'Görsel URL 1'),
             const SizedBox(height: 12),
-            _buildImageField(
-              controller: image3Controller,
-              hint: 'Görsel URL 3',
-            ),
+            _buildImageField(controller: image2Controller, hint: 'Görsel URL 2'),
+            const SizedBox(height: 12),
+            _buildImageField(controller: image3Controller, hint: 'Görsel URL 3'),
             const SizedBox(height: 28),
             PrimaryButton(
               text: 'Portföyü Kaydet',
@@ -226,46 +383,11 @@ class _AddPortfolioPageState extends ConsumerState<AddPortfolioPage> {
       ),
     );
   }
-
-  InputDecoration _inputDecoration(String hint) {
-    return InputDecoration(
-      hintText: hint,
-      filled: true,
-      fillColor: AppColors.white,
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 16,
-      ),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: AppColors.border),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: AppColors.border),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: AppColors.primaryDark),
-      ),
-    );
-  }
 }
 
 class _SectionTitle extends StatelessWidget {
   final String text;
-
   const _SectionTitle(this.text);
-
   @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 17,
-        fontWeight: FontWeight.w900,
-        color: AppColors.black,
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }

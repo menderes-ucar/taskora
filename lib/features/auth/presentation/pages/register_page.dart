@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import '../../../../app/config/app_constants.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../shared/enums/user_role.dart';
-import '../providers/auth_provider.dart';
+import '../../../notification/data/services/notification_helper.dart'; // 🚀 EKLENDİ
+import '../providers/auth_state.dart';
 
 class RegisterPage extends ConsumerStatefulWidget {
   const RegisterPage({super.key});
@@ -13,46 +14,82 @@ class RegisterPage extends ConsumerStatefulWidget {
 }
 
 class _RegisterPageState extends ConsumerState<RegisterPage> {
-  final _formKey = GlobalKey<FormState>();
-
-  final firstNameController = TextEditingController();
-  final lastNameController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
-  final confirmPasswordController = TextEditingController();
+  final firstNameController = TextEditingController();
+  final lastNameController = TextEditingController();
 
-  UserRole? selectedRole;
-  bool obscurePassword = true;
-  bool obscureConfirmPassword = true;
+  final companyNameController = TextEditingController();
+  final industryController = TextEditingController();
+  final titleController = TextEditingController();
+  final hourlyRateController = TextEditingController();
+
+  UserRole selectedRole = UserRole.freelancer;
 
   @override
   void dispose() {
-    firstNameController.dispose();
-    lastNameController.dispose();
     emailController.dispose();
     passwordController.dispose();
-    confirmPasswordController.dispose();
+    firstNameController.dispose();
+    lastNameController.dispose();
+    companyNameController.dispose();
+    industryController.dispose();
+    titleController.dispose();
+    hourlyRateController.dispose();
     super.dispose();
   }
 
   Future<void> _handleRegister() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    if (selectedRole == null) {
+    if (firstNameController.text.trim().isEmpty ||
+        lastNameController.text.trim().isEmpty ||
+        emailController.text.trim().isEmpty ||
+        passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Lütfen bir rol seçin'),
-        ),
+            backgroundColor: AppColors.danger,
+            content: Text('Lütfen temel alanları doldurun.',
+                style: TextStyle(fontWeight: FontWeight.bold))),
       );
       return;
     }
 
+    if (selectedRole == UserRole.employer &&
+        companyNameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            backgroundColor: AppColors.danger,
+            content: Text('İşveren için Şirket Adı zorunludur.',
+                style: TextStyle(fontWeight: FontWeight.bold))),
+      );
+      return;
+    }
+
+    if (selectedRole == UserRole.freelancer &&
+        titleController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            backgroundColor: AppColors.danger,
+            content: Text('Freelancer için Uzmanlık Ünvanı zorunludur.',
+                style: TextStyle(fontWeight: FontWeight.bold))),
+      );
+      return;
+    }
+
+    String extraData = '';
+    if (selectedRole == UserRole.employer) {
+      extraData =
+      '||COMPANY:${companyNameController.text.trim()}||INDUSTRY:${industryController.text.trim()}';
+    } else {
+      extraData =
+      '||TITLE:${titleController.text.trim()}||RATE:${hourlyRateController.text.trim()}';
+    }
+
     final success = await ref.read(authProvider.notifier).signUp(
-      firstName: firstNameController.text,
-      lastName: lastNameController.text,
-      email: emailController.text,
+      firstName: firstNameController.text.trim(),
+      lastName: '${lastNameController.text.trim()}$extraData',
+      email: emailController.text.trim(),
       password: passwordController.text,
-      role: selectedRole!,
+      role: selectedRole,
     );
 
     if (!mounted) return;
@@ -62,18 +99,24 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
     if (!success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(authState.errorMessage ?? 'Kayıt başarısız'),
+          backgroundColor: AppColors.danger,
+          content: Text(
+              authState.errorMessage ?? 'Kayıt esnasında bir hata oluştu.',
+              style: const TextStyle(fontWeight: FontWeight.bold)),
         ),
       );
       return;
     }
 
+    // 🚀 KAYIT VE OTURUM BAŞARILI OLDUĞUNDA FCM TOKEN'I SÜRDÜR/KAYDET
+    await NotificationHelper.saveFcmToken();
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Kayıt başarılı. Mail doğrulayıp giriş yapın.'),
-      ),
+          backgroundColor: AppColors.success,
+          content: Text('Kayıt başarılı! Giriş yapabilirsiniz.',
+              style: TextStyle(fontWeight: FontWeight.bold))),
     );
-
     Navigator.pop(context);
   }
 
@@ -82,219 +125,287 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
     final authState = ref.watch(authProvider);
 
     return Scaffold(
+      backgroundColor: AppColors.primary,
       appBar: AppBar(
-        title: const Text('Kayıt Ol'),
+        backgroundColor: AppColors.primary,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        foregroundColor: Colors.white,
       ),
       body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(24),
+              const Text(
+                'Hesap Oluştur',
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  letterSpacing: -0.5,
                 ),
-                child: const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Taskora’ya Katıl',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.black,
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Taskora platformuna katılarak hemen işlemlere başla.',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.white70,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 28),
+
+              const Text(
+                'Kullanıcı Rolü Seçin',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(18),
+                      onTap: () =>
+                          setState(() => selectedRole = UserRole.freelancer),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: selectedRole == UserRole.freelancer
+                              ? Colors.white
+                              : Colors.white.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: selectedRole == UserRole.freelancer
+                                ? Colors.white
+                                : Colors.white.withValues(alpha: 0.20),
+                            width: selectedRole == UserRole.freelancer ? 2 : 1,
+                          ),
+                          boxShadow: selectedRole == UserRole.freelancer
+                              ? [
+                            BoxShadow(
+                              color: AppColors.black
+                                  .withValues(alpha: 0.08),
+                              blurRadius: 12,
+                              offset: const Offset(0, 6),
+                            ),
+                          ]
+                              : [],
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.person_outline_rounded,
+                              color: selectedRole == UserRole.freelancer
+                                  ? AppColors.primaryDark
+                                  : Colors.white,
+                              size: 26,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Freelancer',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                color: selectedRole == UserRole.freelancer
+                                    ? AppColors.black
+                                    : Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Hesabını oluştur, rolünü seç ve platformu gerçek akışla kullanmaya başla.',
-                      style: TextStyle(
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(18),
+                      onTap: () =>
+                          setState(() => selectedRole = UserRole.employer),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: selectedRole == UserRole.employer
+                              ? Colors.white
+                              : Colors.white.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: selectedRole == UserRole.employer
+                                ? Colors.white
+                                : Colors.white.withValues(alpha: 0.20),
+                            width: selectedRole == UserRole.employer ? 2 : 1,
+                          ),
+                          boxShadow: selectedRole == UserRole.employer
+                              ? [
+                            BoxShadow(
+                              color: AppColors.black
+                                  .withValues(alpha: 0.08),
+                              blurRadius: 12,
+                              offset: const Offset(0, 6),
+                            ),
+                          ]
+                              : [],
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.business_center_rounded,
+                              color: selectedRole == UserRole.employer
+                                  ? AppColors.primaryDark
+                                  : Colors.white,
+                              size: 26,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'İşveren',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                color: selectedRole == UserRole.employer
+                                    ? AppColors.black
+                                    : Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 28),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: firstNameController,
+                      style: const TextStyle(
                         color: AppColors.black,
-                        height: 1.45,
                         fontWeight: FontWeight.w500,
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              const _SectionTitle('Rol Seçimi'),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _RoleSelectCard(
-                      title: 'Freelancer',
-                      subtitle: 'İş bul, teklif ver, proje al',
-                      icon: Icons.work_outline_rounded,
-                      selected: selectedRole == UserRole.freelancer,
-                      onTap: () {
-                        setState(() {
-                          selectedRole = UserRole.freelancer;
-                        });
-                      },
+                      decoration: _inputDecoration(
+                          'Ad', Icons.person_outline_rounded),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 14),
                   Expanded(
-                    child: _RoleSelectCard(
-                      title: 'İşveren',
-                      subtitle: 'İlan yayınla, teklif al, freelancer seç',
-                      icon: Icons.business_center_outlined,
-                      selected: selectedRole == UserRole.employer,
-                      onTap: () {
-                        setState(() {
-                          selectedRole = UserRole.employer;
-                        });
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              const _SectionTitle('Kişisel Bilgiler'),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _StyledTextField(
-                      controller: firstNameController,
-                      hintText: 'Ad',
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Ad girin';
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _StyledTextField(
+                    child: TextField(
                       controller: lastNameController,
-                      hintText: 'Soyad',
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Soyad girin';
-                        }
-                        return null;
-                      },
+                      style: const TextStyle(
+                        color: AppColors.black,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      decoration: _inputDecoration(
+                          'Soyad', Icons.person_outline_rounded),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              _StyledTextField(
+              const SizedBox(height: 16),
+              TextField(
                 controller: emailController,
-                hintText: 'E-posta',
                 keyboardType: TextInputType.emailAddress,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'E-posta girin';
-                  }
-                  if (!value.contains('@')) {
-                    return 'Geçerli bir e-posta girin';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 20),
-              const _SectionTitle('Güvenlik'),
-              const SizedBox(height: 10),
-              _StyledTextField(
-                controller: passwordController,
-                hintText: 'Şifre',
-                obscureText: obscurePassword,
-                suffixIcon: IconButton(
-                  onPressed: () {
-                    setState(() {
-                      obscurePassword = !obscurePassword;
-                    });
-                  },
-                  icon: Icon(
-                    obscurePassword
-                        ? Icons.visibility_off_rounded
-                        : Icons.visibility_rounded,
-                  ),
+                style: const TextStyle(
+                  color: AppColors.black,
+                  fontWeight: FontWeight.w500,
                 ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Şifre girin';
-                  }
-                  if (value.trim().length < 6) {
-                    return 'Şifre en az 6 karakter olmalı';
-                  }
-                  return null;
-                },
+                decoration: _inputDecoration(
+                    'E-posta Adresi', Icons.mail_outline_rounded),
               ),
-              const SizedBox(height: 8),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4),
-                child: Text(
-                  'Şifren en az 6 karakter olmalı. Harf ve rakam kullanman önerilir.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.grey,
-                    height: 1.4,
+              const SizedBox(height: 16),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                style: const TextStyle(
+                  color: AppColors.black,
+                  fontWeight: FontWeight.w500,
+                ),
+                decoration: _inputDecoration(
+                    'Şifre (En az 6 karakter)', Icons.lock_open_rounded),
+              ),
+              const SizedBox(height: 16),
+
+              if (selectedRole == UserRole.employer) ...[
+                TextField(
+                  controller: companyNameController,
+                  style: const TextStyle(
+                    color: AppColors.black,
                     fontWeight: FontWeight.w500,
                   ),
+                  decoration: _inputDecoration(
+                      'Şirket Adı / Ticari Ünvan *', Icons.business_rounded),
                 ),
-              ),
-              const SizedBox(height: 12),
-              _StyledTextField(
-                controller: confirmPasswordController,
-                hintText: 'Şifre Tekrar',
-                obscureText: obscureConfirmPassword,
-                suffixIcon: IconButton(
-                  onPressed: () {
-                    setState(() {
-                      obscureConfirmPassword = !obscureConfirmPassword;
-                    });
-                  },
-                  icon: Icon(
-                    obscureConfirmPassword
-                        ? Icons.visibility_off_rounded
-                        : Icons.visibility_rounded,
+                const SizedBox(height: 16),
+                TextField(
+                  controller: industryController,
+                  style: const TextStyle(
+                    color: AppColors.black,
+                    fontWeight: FontWeight.w500,
                   ),
+                  decoration: _inputDecoration('Sektör (Opsiyonel)',
+                      Icons.domain_verification_rounded),
                 ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Şifre tekrarı girin';
-                  }
-                  if (value.trim() != passwordController.text.trim()) {
-                    return 'Şifreler eşleşmiyor';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 24),
+              ],
+
+              if (selectedRole == UserRole.freelancer) ...[
+                TextField(
+                  controller: titleController,
+                  style: const TextStyle(
+                    color: AppColors.black,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  decoration: _inputDecoration(
+                      'Uzmanlık Ünvanı * (Örn: Flutter Developer)',
+                      Icons.psychology_outlined),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: hourlyRateController,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(
+                    color: AppColors.black,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  decoration: _inputDecoration(
+                      'Hedef Saatlik Ücret ₺ (Opsiyonel)',
+                      Icons.monetization_on_outlined),
+                ),
+              ],
+
+              const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,
-                height: 54,
+                height: 56,
                 child: ElevatedButton(
                   onPressed: authState.isLoading ? null : _handleRegister,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: AppColors.black,
+                    backgroundColor: AppColors.primaryDark,
+                    foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    textStyle: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 16,
+                      borderRadius: BorderRadius.circular(18),
                     ),
                   ),
                   child: authState.isLoading
                       ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
                   )
-                      : const Text('Hesap Oluştur'),
+                      : const Text(
+                    'Kayıt Ol',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -303,130 +414,35 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
       ),
     );
   }
-}
 
-class _SectionTitle extends StatelessWidget {
-  final String text;
-
-  const _SectionTitle(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 17,
-        fontWeight: FontWeight.w900,
-        color: AppColors.black,
+  InputDecoration _inputDecoration(String hint, IconData icon) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(color: AppColors.grey),
+      prefixIcon: Icon(icon, color: AppColors.primaryDark, size: 20),
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 16,
       ),
-    );
-  }
-}
-
-class _StyledTextField extends StatelessWidget {
-  final TextEditingController controller;
-  final String hintText;
-  final bool obscureText;
-  final TextInputType? keyboardType;
-  final Widget? suffixIcon;
-  final String? Function(String?)? validator;
-
-  const _StyledTextField({
-    required this.controller,
-    required this.hintText,
-    this.obscureText = false,
-    this.keyboardType,
-    this.suffixIcon,
-    this.validator,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      obscureText: obscureText,
-      keyboardType: keyboardType,
-      validator: validator,
-      decoration: InputDecoration(
-        hintText: hintText,
-        suffixIcon: suffixIcon,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide(
+          color: AppColors.primaryDark.withValues(alpha: 0.20),
+        ),
       ),
-    );
-  }
-}
-
-class _RoleSelectCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _RoleSelectCard({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected
-          ? AppColors.primary.withValues(alpha: 0.16)
-          : AppColors.white,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Ink(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: selected
-                  ? AppColors.primaryDark
-                  : AppColors.border,
-              width: selected ? 1.6 : 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(
-                  icon,
-                  color: AppColors.primaryDark,
-                  size: 26,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.black,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                subtitle,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.grey,
-                  height: 1.4,
-                ),
-              ),
-            ],
-          ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide(
+          color: AppColors.primaryDark.withValues(alpha: 0.20),
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(
+          color: AppColors.primaryDark,
+          width: 1.5,
         ),
       ),
     );

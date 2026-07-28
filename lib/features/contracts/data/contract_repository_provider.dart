@@ -1,23 +1,47 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../../shared/enums/contract_status.dart';
+import '../../../../shared/enums/payment_status.dart';
+import '../../../../shared/models/contract_delivery_model.dart';
+import '../../../../shared/models/contract_model.dart';
+import '../../../../shared/models/contract_timeline_model.dart';
 
-import 'contract_repository.dart';
-import 'mock_contract_repository.dart';
-import 'supabase_contract_repository.dart';
+abstract class IContractRepository {
+  // Liste & Arama
+  Future<List<ContractModel>> getAllContracts();
+  Future<List<ContractModel>> getByFreelancer(String freelancerId);
+  Future<List<ContractModel>> getByEmployer(String employerId);
+  Future<ContractModel?> getById(String contractId);
+  Future<ContractModel?> getByJobId(String jobId);
+  Future<bool> hasContractForJob(String jobId);
 
-final contractSupabaseClientProvider = Provider<SupabaseClient>((ref) {
-  return Supabase.instance.client;
-});
+  // Yan Tablolar
+  Future<List<ContractTimelineModel>> getTimeline(String contractId);
+  Future<List<ContractDeliveryModel>> getDeliveries(String contractId);
 
-final useMockContractsProvider = Provider<bool>((ref) => false);
+  // Ekleme & Güncelleme
+  Future<void> addContract(ContractModel contract);
+  Future<void> updateContractStatus(String contractId, ContractStatus status);
+  Future<void> updatePaymentStatus(String contractId, PaymentStatus status);
 
-final contractRepositoryProvider = Provider<ContractRepository>((ref) {
-  final useMock = ref.watch(useMockContractsProvider);
+  // RPC İşlemleri
+  Future<void> releasePayment(String contractId, String actorId);
+  Future<void> submitDelivery({
+    required String contractId,
+    required String actorId,
+    required String message,
+    String? fileUrl,
+  });
+  Future<void> requestRevision({
+    required String contractId,
+    required String actorId,
+    required String reason,
+  });
+  Future<void> executeContractPayment({
+    required String contractId,
+    required String employerId,
+    required String freelancerId,
+    required double totalAmount,
+  });
+}
 
-  if (useMock) {
-    return MockContractRepository();
-  }
-
-  final supabase = ref.watch(contractSupabaseClientProvider);
-  return SupabaseContractRepository(supabase);
-});
+// Eski isimlendirme kullanan yerler için alias (Tip Uyuşmazlığını Çözer)
+typedef ContractRepository = IContractRepository;
