@@ -17,7 +17,6 @@ workflows:
         bundle_identifier: com.mndrs.taskora
 
       groups:
-        - appstore_credentials
         - taskora_env
         - firebase_credentials
 
