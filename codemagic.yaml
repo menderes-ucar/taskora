@@ -1,0 +1,123 @@
+workflows:
+  ios-testflight:
+    name: Taskora iOS - TestFlight
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+
+    integrations:
+      # Codemagic > Team settings > Integrations > App Store Connect
+      # Bu isim Codemagic'teki integration adıyla aynı olmalı.
+      app_store_connect: taskora-appstore-connect
+
+    environment:
+      flutter: stable
+
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.mndrs.taskora
+
+      groups:
+        - appstore_credentials
+        - taskora_env
+        - firebase_credentials
+
+      vars:
+        APP_STORE_APPLE_ID: "REPLACE_WITH_APP_STORE_CONNECT_APPLE_ID"
+
+    scripts:
+      - name: Load Firebase iOS configuration
+        script: |
+          set -e
+          if [ -z "${IOS_FIREBASE_SECRET:-}" ]; then
+            echo "ERROR: IOS_FIREBASE_SECRET is not configured in Codemagic."
+            exit 1
+          fi
+
+          printf '%s' "$IOS_FIREBASE_SECRET" > "$CM_BUILD_DIR/ios/Runner/GoogleService-Info.plist"
+
+      - name: Create production environment file
+        script: |
+          set -e
+
+          if [ -z "${SUPABASE_URL:-}" ]; then
+            echo "ERROR: SUPABASE_URL is not configured."
+            exit 1
+          fi
+
+          if [ -z "${SUPABASE_ANON_KEY:-}" ]; then
+            echo "ERROR: SUPABASE_ANON_KEY is not configured."
+            exit 1
+          fi
+
+          if [ -z "${STRIPE_PUBLISHABLE_KEY:-}" ]; then
+            echo "ERROR: STRIPE_PUBLISHABLE_KEY is not configured."
+            exit 1
+          fi
+
+          cat > "$CM_BUILD_DIR/.env" <<EOF
+          SUPABASE_URL=$SUPABASE_URL
+          SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+          STRIPE_PUBLISHABLE_KEY=$STRIPE_PUBLISHABLE_KEY
+          EOF
+
+      - name: Get Flutter packages
+        script: |
+          set -e
+          flutter pub get
+
+      - name: Install CocoaPods dependencies
+        script: |
+          set -e
+          cd "$CM_BUILD_DIR/ios"
+          pod install --repo-update
+
+      - name: Validate Flutter project
+        script: |
+          set -e
+          flutter analyze
+
+      - name: Run Flutter tests
+        script: |
+          set -e
+          flutter test
+
+      - name: Set up iOS code signing
+        script: |
+          set -e
+          xcode-project use-profiles
+
+      - name: Calculate build number
+        script: |
+          set -e
+
+          if [ -z "${APP_STORE_APPLE_ID:-}" ] || [ "$APP_STORE_APPLE_ID" = "REPLACE_WITH_APP_STORE_CONNECT_APPLE_ID" ]; then
+            echo "ERROR: Set APP_STORE_APPLE_ID in Codemagic."
+            exit 1
+          fi
+
+          LATEST_BUILD_NUMBER="$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)"
+
+          if ! [[ "$LATEST_BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+            LATEST_BUILD_NUMBER=0
+          fi
+
+          BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
+          echo "Using iOS build number: $BUILD_NUMBER"
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$CM_ENV"
+
+      - name: Build iOS IPA
+        script: |
+          set -e
+          flutter build ipa             --release             --build-number="$BUILD_NUMBER"             --export-options-plist=/Users/builder/export_options.plist
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - build/ios/archive/**/*.dSYM
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - Internal Testers
