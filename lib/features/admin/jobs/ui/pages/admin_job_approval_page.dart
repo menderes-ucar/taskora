@@ -60,23 +60,30 @@ class _AdminJobApprovalPageState extends State<AdminJobApprovalPage>
   }
 
   Future<void> _updateStatus(String jobId, String newStatus, String employerId) async {
-    final nowIso = DateTime.now().toIso8601String();
-
     try {
-      final updateData = <String, dynamic>{
-        'status': newStatus,
-      };
-
-      if (newStatus == 'open') {
-        updateData['approved_at'] = nowIso;
+      if (newStatus != 'open' && newStatus != 'rejected') {
+        throw ArgumentError('Geçersiz ilan durumu.');
       }
 
-      await _supabase.from('jobs').update(updateData).eq('id', jobId);
+      await _supabase.rpc(
+        'admin_update_job_status_secure',
+        params: {
+          'p_job_id': jobId,
+          'p_new_status': newStatus,
+          'p_reason': newStatus == 'open'
+              ? 'Admin tarafından onaylandı.'
+              : 'Admin tarafından reddedildi.',
+        },
+      );
+
+      if (!mounted) return;
 
       if (employerId.isNotEmpty) {
         await NotificationHelper.send(
           targetUserId: employerId,
-          title: newStatus == 'open' ? 'İlanınız Onaylandı! 🎉' : 'İlanınız Reddedildi ❌',
+          title: newStatus == 'open'
+              ? 'İlanınız Onaylandı! 🎉'
+              : 'İlanınız Reddedildi ❌',
           body: newStatus == 'open'
               ? 'Yayınladığınız ilan onaylandı ve listelerde görünür hale geldi.'
               : 'Yayınladığınız ilan platform kurallarına uymadığı için reddedildi.',
@@ -92,12 +99,27 @@ class _AdminJobApprovalPageState extends State<AdminJobApprovalPage>
         if (index != -1) {
           _allJobs[index]['status'] = newStatus;
           if (newStatus == 'open') {
-            _allJobs[index]['approved_at'] = nowIso;
+            _allJobs[index]['approved_at'] = DateTime.now().toIso8601String();
           }
         }
       });
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+      final message = switch (e.message) {
+        'not_authorized' => 'Bu işlem için yetkiniz yok.',
+        'job_not_found' => 'İlan bulunamadı.',
+        'invalid_status' => 'Geçersiz ilan durumu.',
+        _ => e.message,
+      };
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(backgroundColor: AppColors.danger, content: Text(message)),
+      );
     } catch (e) {
-      debugPrint('Hata: $e');
+      debugPrint('Admin job status error: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(backgroundColor: AppColors.danger, content: Text('İlan durumu güncellenemedi: $e')),
+      );
     }
   }
 

@@ -1,10 +1,7 @@
-// lib/core/services/wallet_service.dart
-
-import 'package:supabase_flutter/supabase_flutter.dart' hide Provider;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../error/app_exception.dart';
 import '../../shared/models/wallet_model.dart';
 import '../../shared/models/transaction_model.dart';
-import '../../shared/enums/transaction_type.dart';
 
 abstract class IWalletService {
   Future<WalletModel> getWallet(String userId);
@@ -27,24 +24,14 @@ class SupabaseWalletService implements IWalletService {
   @override
   Future<WalletModel> getWallet(String userId) async {
     try {
-      // Get or create wallet
-      var response = await _supabase
+      final response = await _supabase
           .from('wallets')
           .select()
           .eq('user_id', userId)
           .maybeSingle();
 
       if (response == null) {
-        // Create new wallet
-        response = await _supabase
-            .from('wallets')
-            .insert({
-          'user_id': userId,
-          'balance': 0.0,
-          'created_at': DateTime.now().toIso8601String(),
-        })
-            .select()
-            .single();
+        throw StateError('Kullanıcı cüzdanı bulunamadı.');
       }
 
       return WalletModel.fromJson(response);
@@ -61,7 +48,7 @@ class SupabaseWalletService implements IWalletService {
       }) async {
     try {
       const limit = 20;
-      int offset = (page - 1) * limit;
+      final offset = (page - 1) * limit;
 
       var query = _supabase
           .from('transactions')
@@ -76,9 +63,9 @@ class SupabaseWalletService implements IWalletService {
           .order('created_at', ascending: false)
           .range(offset, offset + limit - 1);
 
-      return List<TransactionModel>.from(
-        (response as List).map((txn) => TransactionModel.fromJson(txn)),
-      );
+      return (response as List)
+          .map((txn) => TransactionModel.fromJson(Map<String, dynamic>.from(txn)))
+          .toList();
     } catch (e) {
       throw ExceptionFactory.create(e, StackTrace.current);
     }
@@ -90,109 +77,32 @@ class SupabaseWalletService implements IWalletService {
       double amount,
       String paymentMethod,
       ) async {
-    try {
-      // Get current wallet
-      final wallet = await getWallet(userId);
-
-      // Update wallet balance
-      await _supabase
-          .from('wallets')
-          .update({
-        'balance': wallet.balance + amount,
-        'updated_at': DateTime.now().toIso8601String(),
-      })
-          .eq('user_id', userId);
-
-      // Create transaction record
-      await createTransaction(
-        TransactionModel(
-          id: '',
-          userId: userId,
-          amount: amount,
-          type: TransactionType.deposit,
-          title: 'Add Funds',
-          description: 'Funds added via $paymentMethod',
-          createdAt: DateTime.now(),
-          isIncome: true,
-        ),
-      );
-    } catch (e) {
-      throw ExceptionFactory.create(e, StackTrace.current);
-    }
+    // Deprecated by design. A wallet credit must originate from a verified
+    // payment settlement, never from a client-supplied amount.
+    throw StateError(
+      'Cüzdan bakiyesi doğrudan eklenemez. Doğrulanmış ödeme akışını kullanın.',
+    );
   }
 
   @override
   Future<void> withdrawFunds(String userId, double amount) async {
-    try {
-      // Get current wallet
-      final wallet = await getWallet(userId);
-
-      // Check sufficient balance
-      if (wallet.balance < amount) {
-        throw AppException(
-          message: 'Insufficient balance',
-          type: AppExceptionType.validation,
-        );
-      }
-
-      // Update wallet balance
-      await _supabase
-          .from('wallets')
-          .update({
-        'balance': wallet.balance - amount,
-        'updated_at': DateTime.now().toIso8601String(),
-      })
-          .eq('user_id', userId);
-
-      // Create transaction record
-      await createTransaction(
-        TransactionModel(
-          id: '',
-          userId: userId,
-          amount: amount,
-          type: TransactionType.withdrawal,
-          title: 'Withdrawal',
-          description: 'Withdrawal request',
-          createdAt: DateTime.now(),
-          isIncome: false,
-        ),
-      );
-    } catch (e) {
-      throw ExceptionFactory.create(e, StackTrace.current);
-    }
+    throw StateError(
+      'Para çekme işlemi payout request akışı üzerinden yapılmalıdır.',
+    );
   }
 
   @override
   Future<TransactionModel> createTransaction(
       TransactionModel transaction,
       ) async {
-    try {
-      final response = await _supabase
-          .from('transactions')
-          .insert({
-        'user_id': transaction.userId,
-        'amount': transaction.amount,
-        'type': transaction.type,
-        'status': transaction.status,
-        'description': transaction.description,
-        'created_at': DateTime.now().toIso8601String(),
-      })
-          .select()
-          .single();
-
-      return TransactionModel.fromJson(response);
-    } catch (e) {
-      throw ExceptionFactory.create(e, StackTrace.current);
-    }
+    throw StateError(
+      'Muhasebe işlemleri istemciden doğrudan oluşturulamaz.',
+    );
   }
 
   @override
   Future<double> getBalance(String userId) async {
-    try {
-      final wallet = await getWallet(userId);
-      return wallet.balance;
-    } catch (e) {
-      throw ExceptionFactory.create(e, StackTrace.current);
-    }
+    final wallet = await getWallet(userId);
+    return wallet.balance;
   }
 }

@@ -156,5 +156,6 @@ class UserModel {
 }
 
 extension UserRoleX on UserModel {
-  bool get isAdmin => role == UserRole.admin;
+  bool get isAdmin => role.isAdminRole;
+  bool get isSuperAdmin => role == UserRole.superAdmin;
 }

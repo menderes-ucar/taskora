@@ -1,4 +1,4 @@
-import 'package:supabase_flutter/supabase_flutter.dart' hide Provider;
+import 'package:supabase_flutter/supabase_flutter.dart' ;
 import '../../features/coin/data/services/coin_service.dart';
 import '../error/app_exception.dart';
 import '../../shared/models/message_model.dart';

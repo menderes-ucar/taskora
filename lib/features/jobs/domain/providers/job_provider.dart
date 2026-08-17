@@ -51,11 +51,16 @@ class JobsNotifier extends AsyncNotifier<List<JobModel>> {
 
   Future<void> addJob(JobModel job) async {
     final repository = ref.read(jobRepositoryProvider);
+
     state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() async {
+
+    try {
       await repository.addJob(job);
-      return repository.getAllJobs();
-    });
+      state = AsyncValue.data(await repository.getAllJobs());
+    } catch (e, stack) {
+      state = AsyncValue.error(e, stack);
+      rethrow;
+    }
   }
 
   Future<void> updateJob(String jobId, JobModel updatedJob) async {

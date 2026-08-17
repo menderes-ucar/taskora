@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/theme/app_colors.dart';
-import '../../data/services/notification_helper.dart';
 import '../../domain/providers/notification_provider.dart';
 import '../pages/notifications_page.dart';
 

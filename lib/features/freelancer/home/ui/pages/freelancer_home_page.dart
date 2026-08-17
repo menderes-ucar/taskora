@@ -135,9 +135,16 @@ class FreelancerHomePage extends ConsumerWidget {
               color: AppColors.primaryDark,
               backgroundColor: Colors.white,
               onRefresh: () async {
-                ref.invalidate(proposalsProvider);
-                ref.invalidate(contractsProvider);
-                ref.invalidate(jobsProvider);
+                // Do not invalidate the AsyncNotifier providers here.
+                // Invalidating them rebuilds their `build()` methods and can
+                // recreate realtime subscriptions unnecessarily. Contracts
+                // in particular owns a realtime lifecycle, so pull-to-refresh
+                // should refresh its data while keeping the subscription alive.
+                await Future.wait([
+                  ref.read(proposalsProvider.notifier).refreshProposals(),
+                  ref.read(contractsProvider.notifier).refreshContracts(),
+                  ref.read(jobsProvider.notifier).refreshJobs(),
+                ]);
               },
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),

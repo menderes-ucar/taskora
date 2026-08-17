@@ -2,51 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/theme/app_colors.dart';
+import '../../../../shared/constants/job_categories.dart';
 import '../../domain/providers/job_provider.dart';
 import 'job_list_page.dart';
 
 class JobCategoriesPage extends ConsumerWidget {
   const JobCategoriesPage({super.key});
 
-  static const List<_CategoryItem> _categories = [
-    _CategoryItem(
-      title: 'Grafik & Tasarım',
-      categoryValue: 'Grafik Tasarım',
-      icon: Icons.brush_rounded,
-      color: Color(0xFFFF2A54),
-    ),
-    _CategoryItem(
-      title: 'Sosyal Medya',
-      categoryValue: 'Sosyal Medya',
-      icon: Icons.ads_click_rounded,
-      color: Color(0xFFFFB800),
-    ),
-    _CategoryItem(
-      title: 'Yazı & Çeviri',
-      categoryValue: 'Yazı Çeviri',
-      icon: Icons.edit_rounded,
-      color: Color(0xFF00F0FF),
-    ),
-    _CategoryItem(
-      title: 'Video & Animasyon',
-      categoryValue: 'Video',
-      icon: Icons.videocam_rounded,
-      color: Color(0xFF00FF66),
-    ),
-    _CategoryItem(
-      title: 'Ses & Müzik',
-      categoryValue: 'Ses Müzik',
-      icon: Icons.headphones_rounded,
-      color: Color(0xFF9D4EDD),
-    ),
-    _CategoryItem(
-      title: 'Yazılım & Teknoloji',
-      categoryValue: 'Yazılım',
-      icon: Icons.code_rounded,
-      color: Color(0xFFFF6B00),
-    ),
-  ];
-
+  static final List<_CategoryItem> _categories = [
+    const Color(0xFF4D9FFF),
+    const Color(0xFF00D4A8),
+    const Color(0xFFFF5A5F),
+    const Color(0xFFB56CFF),
+    const Color(0xFF8B7CFF),
+    const Color(0xFF00A8E8),
+    const Color(0xFF6C63FF),
+    const Color(0xFF00B894),
+    const Color(0xFFFF8A3D),
+    const Color(0xFF5C7AEA),
+    const Color(0xFFFF2A54),
+    const Color(0xFF00C878),
+    const Color(0xFF00C9D7),
+    const Color(0xFFFFB800),
+    const Color(0xFF9D4EDD),
+  ].asMap().entries.map((entry) {
+    final category = TaskoraJobCategories.all[entry.key];
+    return _CategoryItem(
+      title: category.label,
+      categoryValue: category.value,
+      icon: category.icon,
+      color: entry.value,
+    );
+  }).toList(growable: false);
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final openJobs = ref.watch(openJobsProvider);

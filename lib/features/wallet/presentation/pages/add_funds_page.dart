@@ -1,20 +1,68 @@
-// lib/features/wallet/presentation/pages/add_funds_page.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide Provider;
+import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 import '../../../../app/theme/app_colors.dart';
-import '../../../../core/services/wallet_services.dart';
 
-// UI Tarafında Eksik / Olmayan Ödeme Soyutlama Arayüzleri Derleme İçin Tanımlandı
 abstract class IPaymentService {
-  Future<PaymentResult> processPayment({required double amount, required String currency, required String description});
+  Future<void> processPayment({
+    required double amount,
+    required String currency,
+    required String description,
+  });
 }
 
 class StripePaymentService implements IPaymentService {
+  final SupabaseClient _supabase;
+
+  StripePaymentService(this._supabase);
+
   @override
-  Future<PaymentResult> processPayment({required double amount, required String currency, required String description}) async {
-    return PaymentResult(success: true); // Simüle edilmiş SaaS Stripe entegrasyonu
+  Future<void> processPayment({
+    required double amount,
+    required String currency,
+    required String description,
+  }) async {
+    if (amount <= 0) throw ArgumentError.value(amount, 'amount');
+
+    final idempotencyKey = const Uuid().v4();
+
+    final response = await _supabase.functions.invoke(
+      'create-payment-intent',
+      body: {
+        'amount': amount,
+        'currency': currency.toLowerCase(),
+        'description': description,
+        'idempotency_key': idempotencyKey,
+      },
+    );
+
+    if (response.data is! Map) {
+      throw StateError('Ödeme oturumu oluşturulamadı.');
+    }
+
+    final data = Map<String, dynamic>.from(response.data as Map);
+    final clientSecret = data['client_secret']?.toString();
+
+    if (clientSecret == null || clientSecret.isEmpty) {
+      throw StateError('Ödeme oturumu oluşturulamadı.');
+    }
+
+    await Stripe.instance.initPaymentSheet(
+      paymentSheetParameters: SetupPaymentSheetParameters(
+        paymentIntentClientSecret: clientSecret,
+        merchantDisplayName: 'Taskora',
+        style: ThemeMode.system,
+      ),
+    );
+
+    await Stripe.instance.presentPaymentSheet();
+
+    // Wallet credit is intentionally NOT performed here. Stripe's signed
+    // webhook is the authoritative settlement source and the database
+    // settlement function is idempotent.
   }
 }
 
@@ -24,24 +72,18 @@ class PaymentResult {
   PaymentResult({required this.success, this.error});
 }
 
-final walletServiceProvider = Provider<IWalletService>((ref) {
-  return SupabaseWalletService(ref.read(supabaseClientProvider));
-});
-
 final paymentServiceProvider = Provider<IPaymentService>((ref) {
-  return StripePaymentService();
-});
-
-final supabaseClientProvider = Provider((ref) {
-  return Supabase.instance.client;
+  return StripePaymentService(Supabase.instance.client);
 });
 
 class AddFundsPage extends ConsumerStatefulWidget {
   final String userId;
+  final double? initialAmount;
 
   const AddFundsPage({
     super.key,
     required this.userId,
+    this.initialAmount,
   });
 
   @override
@@ -60,6 +102,7 @@ class _AddFundsPageState extends ConsumerState<AddFundsPage> {
   void initState() {
     super.initState();
     _amountController = TextEditingController();
+    _selectedAmount = widget.initialAmount ?? 0;
   }
 
   @override
@@ -83,32 +126,27 @@ class _AddFundsPageState extends ConsumerState<AddFundsPage> {
     setState(() => _isLoading = true);
 
     try {
+      if (Stripe.publishableKey.trim().isEmpty) {
+        throw StateError(
+          'Stripe ödeme anahtarı yapılandırılmamış. .env dosyasına STRIPE_PUBLISHABLE_KEY ekleyin.',
+        );
+      }
+
       final paymentService = ref.read(paymentServiceProvider);
-      final result = await paymentService.processPayment(
+      await paymentService.processPayment(
         amount: amount,
-        currency: 'USD',
-        description: 'Cüzdana bakiye yükleme',
+        currency: 'try',
+        description: 'Taskora cüzdan bakiyesi yükleme',
       );
 
-      if (result.success) {
-        final walletService = ref.read(walletServiceProvider);
-        await walletService.addFunds(
-          widget.userId,
-          amount,
-          _selectedPaymentMethod,
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ödeme tamamlandı. ₺${amount.toStringAsFixed(2)} bakiyeniz doğrulama sonrası hesabınıza yansıtılacak.'),
+            backgroundColor: AppColors.success,
+          ),
         );
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Başarıyla ₺$amount cüzdanınıza eklendi!'),
-              backgroundColor: AppColors.success,
-            ),
-          );
-          Navigator.pop(context);
-        }
-      } else {
-        throw Exception(result.error ?? 'Ödeme başarısız');
+        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {

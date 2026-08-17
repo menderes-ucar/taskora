@@ -1,6 +1,9 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide Provider;
+import 'package:supabase_flutter/supabase_flutter.dart' ;
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/services/profile_service.dart';
@@ -24,6 +27,8 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
   final bool _isFreelancer = true;
   final List<String> _skills = [];
   String _newSkill = ''; bool _isLoading = false;
+  bool _isUploadingImage = false;
+  String? _avatarUrl;
 
   @override
   void initState() {
@@ -31,6 +36,76 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
     _nameController = TextEditingController(); _bioController = TextEditingController();
     _phoneController = TextEditingController(); _hourlyRateController = TextEditingController();
     _companyNameController = TextEditingController();
+    _loadExistingProfile();
+  }
+
+  Future<void> _loadExistingProfile() async {
+    try {
+      final profile = await ref.read(profileServiceProvider).getUserProfile(widget.userId);
+      if (!mounted) return;
+      _nameController.text = profile.name;
+      _bioController.text = profile.bio ?? '';
+      _phoneController.text = profile.phone ?? '';
+      setState(() => _avatarUrl = profile.avatarUrl);
+    } catch (e) {
+      debugPrint('Profil bilgileri yüklenemedi: $e');
+    }
+  }
+
+  Future<void> _pickAndUploadAvatar() async {
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+        withData: false,
+      );
+      if (result == null || result.files.isEmpty) return;
+
+      final file = result.files.single;
+      final path = file.path;
+      if (path == null || path.isEmpty) {
+        throw StateError('Seçilen fotoğraf okunamadı.');
+      }
+
+      final extension = (file.extension ?? '').toLowerCase();
+      if (!{'jpg', 'jpeg'}.contains(extension)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profil fotoğrafı yalnızca JPG/JPEG olmalıdır.')),
+          );
+        }
+        return;
+      }
+
+      final image = File(path);
+      final size = await image.length();
+      if (size > 10 * 1024 * 1024) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profil fotoğrafı en fazla 10 MB olabilir.')),
+          );
+        }
+        return;
+      }
+
+      setState(() => _isUploadingImage = true);
+      await ref.read(profileServiceProvider).uploadProfileImage(widget.userId, image);
+
+      final updated = await ref.read(profileServiceProvider).getUserProfile(widget.userId);
+      if (!mounted) return;
+      setState(() => _avatarUrl = updated.avatarUrl);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profil fotoğrafı güncellendi.')),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Profil fotoğrafı yüklenemedi: $e'), backgroundColor: AppColors.danger),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingImage = false);
+    }
   }
 
   @override
@@ -78,6 +153,8 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _buildAvatarSection(),
+            const SizedBox(height: 24),
             _buildSection('Temel Bilgiler', [
               _buildTextField(_nameController, 'İsim'),
               const SizedBox(height: 14),
@@ -226,6 +303,59 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAvatarSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Profil Fotoğrafı',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            CircleAvatar(
+              radius: 42,
+              backgroundColor: Colors.white.withValues(alpha: 0.15),
+              backgroundImage: _avatarUrl != null && _avatarUrl!.isNotEmpty
+                  ? NetworkImage(_avatarUrl!)
+                  : null,
+              child: _avatarUrl == null || _avatarUrl!.isEmpty
+                  ? const Icon(Icons.person, size: 38, color: Colors.white)
+                  : null,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _isUploadingImage ? null : _pickAndUploadAvatar,
+                icon: _isUploadingImage
+                    ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                    : const Icon(Icons.photo_camera_outlined),
+                label: Text(_isUploadingImage ? 'Yükleniyor...' : 'Fotoğrafı Değiştir'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.35)),
+                  minimumSize: const Size.fromHeight(50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 

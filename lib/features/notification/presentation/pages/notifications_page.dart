@@ -11,11 +11,12 @@ import '../../../contracts/presentation/pages/my_active_projects_page.dart';
 
 import '../../../freelancer/proposals/ui/pages/my_proposals_page.dart';
 import '../../../jobs/presentation/pages/job_list_page.dart';
+import '../../../job_board/presentation/pages/freelancer_job_board_page.dart';
 import '../../../jobs/presentation/pages/received_proposals_page.dart';
 
 import '../../../messages/presentation/pages/messages_list_page.dart';
 import '../../../wallet/presentation/pages/wallet_page.dart';
-import '../../data/services/notification_helper.dart';
+
 import '../../domain/providers/notification_provider.dart';
 
 class NotificationsPage extends ConsumerStatefulWidget {
@@ -38,6 +39,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
         Navigator.push(context, MaterialPageRoute(builder: (_) => const MessagesListPage()));
         break;
       case AppNotificationType.newProposal:
+      case AppNotificationType.jobApplicationNew:
         Navigator.push(context, MaterialPageRoute(builder: (_) => const ReceivedProposalsPage()));
         break;
       case AppNotificationType.proposalAccepted:
@@ -45,8 +47,16 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
         Navigator.push(context, MaterialPageRoute(builder: (_) => const MyProposalsPage()));
         break;
       case AppNotificationType.newJobPosted:
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const JobListPage()));
+        break;
+      case AppNotificationType.newJobPostingPublished:
+        Navigator.push(context, MaterialPageRoute(builder: (_) => const FreelancerJobBoardPage()));
+        break;
       case AppNotificationType.jobApproved:
       case AppNotificationType.jobRejected:
+      case AppNotificationType.jobPostingApproved:
+      case AppNotificationType.jobPostingRejected:
+      case AppNotificationType.applicationStatusUpdated:
         Navigator.push(context, MaterialPageRoute(builder: (_) => const JobListPage()));
         break;
       case AppNotificationType.walletUpdated:
@@ -73,14 +83,19 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
     switch (type) {
       case AppNotificationType.newMessage: return Icons.chat_bubble_outline_rounded;
       case AppNotificationType.newProposal: return Icons.description_outlined;
+      case AppNotificationType.jobApplicationNew: return Icons.person_add_alt_1_rounded;
       case AppNotificationType.proposalAccepted: return Icons.check_circle_outline_rounded;
       case AppNotificationType.proposalRejected: return Icons.cancel_outlined;
       case AppNotificationType.jobApproved: return Icons.verified_rounded;
       case AppNotificationType.jobRejected: return Icons.gavel_rounded;
+      case AppNotificationType.jobPostingApproved: return Icons.verified_rounded;
+      case AppNotificationType.jobPostingRejected: return Icons.gavel_rounded;
+      case AppNotificationType.applicationStatusUpdated: return Icons.update_rounded;
       case AppNotificationType.contractCreated: return Icons.assignment_outlined;
       case AppNotificationType.workSubmitted: return Icons.upload_file_outlined;
       case AppNotificationType.contractCompleted: return Icons.task_alt_rounded;
       case AppNotificationType.newJobPosted: return Icons.work_outline_rounded;
+      case AppNotificationType.newJobPostingPublished: return Icons.work_history_outlined;
       case AppNotificationType.walletUpdated: return Icons.account_balance_wallet_outlined;
       case AppNotificationType.coinRefund: return Icons.monetization_on_outlined;
       case AppNotificationType.payoutStatusChanged: return Icons.payments_outlined;
@@ -92,14 +107,19 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
     switch (type) {
       case AppNotificationType.newMessage: return AppColors.primaryDark;
       case AppNotificationType.newProposal: return AppColors.warning;
+      case AppNotificationType.jobApplicationNew: return AppColors.warning;
       case AppNotificationType.proposalAccepted: return AppColors.success;
       case AppNotificationType.proposalRejected: return AppColors.danger;
       case AppNotificationType.jobApproved: return AppColors.success;
       case AppNotificationType.jobRejected: return AppColors.danger;
+      case AppNotificationType.jobPostingApproved: return AppColors.success;
+      case AppNotificationType.jobPostingRejected: return AppColors.danger;
+      case AppNotificationType.applicationStatusUpdated: return AppColors.primaryDark;
       case AppNotificationType.contractCreated: return const Color(0xFF7C3AED);
       case AppNotificationType.workSubmitted: return const Color(0xFF0F766E);
       case AppNotificationType.contractCompleted: return AppColors.success;
       case AppNotificationType.newJobPosted: return AppColors.primaryDark;
+      case AppNotificationType.newJobPostingPublished: return AppColors.primaryDark;
       case AppNotificationType.walletUpdated: return AppColors.success;
       case AppNotificationType.coinRefund: return AppColors.warning;
       case AppNotificationType.payoutStatusChanged: return const Color(0xFF2563EB);
@@ -140,7 +160,39 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
           IconButton(
             icon: const Icon(Icons.done_all_rounded, color: Colors.white),
             tooltip: 'Tümünü Okundu İşaretle',
-            onPressed: () => ref.read(notificationActionProvider).markAllAsRead(currentUser.id),
+            onPressed: () =>
+                ref.read(notificationActionProvider).markAllAsRead(currentUser.id),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_sweep_outlined, color: Colors.white),
+            tooltip: 'Tüm bildirimleri sil',
+            onPressed: () async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text('Bildirimleri sil?'),
+                  content: const Text(
+                    'Tüm bildirim geçmişin kalıcı olarak silinecek.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Vazgeç'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Sil'),
+                    ),
+                  ],
+                ),
+              );
+              if (confirmed == true) {
+                await ref
+                    .read(notificationActionProvider)
+                    .deleteAll(currentUser.id);
+                ref.invalidate(notificationsProvider);
+              }
+            },
           ),
         ],
       ),
@@ -176,39 +228,79 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                     ),
                   ],
                 ),
-                child: ListTile(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                  onTap: () => _handleNotificationTap(context: context, ref: ref, item: item),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  leading: Container(
-                    width: 44,
-                    height: 44,
+                child: Dismissible(
+                  key: ValueKey(item.id),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
                     decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(13),
+                      color: AppColors.danger,
+                      borderRadius: BorderRadius.circular(18),
                     ),
-                    child: Icon(_iconForType(item.type), color: color, size: 22),
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 24),
+                    child: const Icon(Icons.delete_outline, color: Colors.white),
                   ),
-                  title: Text(
-                    item.title,
-                    style: const TextStyle(color: AppColors.black, fontWeight: FontWeight.w900),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          item.body,
-                          style: const TextStyle(color: AppColors.grey, fontSize: 13, height: 1.4),
+                  confirmDismiss: (_) async {
+                    await ref.read(notificationActionProvider).delete(item.id);
+                    return true;
+                  },
+                  child: ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    onTap: () => _handleNotificationTap(
+                      context: context,
+                      ref: ref,
+                      item: item,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    leading: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                      child: Icon(
+                        _iconForType(item.type),
+                        color: color,
+                        size: 22,
+                      ),
+                    ),
+                    title: Text(
+                      item.title,
+                      style: const TextStyle(
+                        color: AppColors.black,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            item.body,
+                            style: const TextStyle(
+                              color: AppColors.grey,
+                              fontSize: 13,
+                              height: 1.4,
+                            ),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        _timeAgo(item.createdAt),
-                        style: TextStyle(color: AppColors.grey.withValues(alpha: 0.7), fontSize: 11),
-                      ),
-                    ],
+                        const SizedBox(height: 6),
+                        Text(
+                          _timeAgo(item.createdAt),
+                          style: TextStyle(
+                            color: AppColors.grey.withValues(alpha: 0.7),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               );

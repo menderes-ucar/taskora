@@ -1,87 +1,73 @@
 import 'dart:async';
-import 'dart:io';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'app/app.dart';
-import 'features/notification/data/services/notification_helper.dart';
-import 'firebase_options.dart';
 
 import 'app/router/app_router.dart';
-import 'app/router/route_names.dart';
 import 'app/theme/app_theme.dart';
-
-class MyHttpOverrides extends HttpOverrides {
-  @override
-  HttpClient createHttpClient(SecurityContext? context) {
-    return super.createHttpClient(context)
-      ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
-  }
-}
+import 'core/realtime/realtime_manager.dart';
+import 'features/notification/data/services/notification_helper.dart';
+import 'features/admin/admin_guard.dart';
+import 'features/admin/dashboard/ui/pages/admin_dashboard_page.dart';
+import 'features/auth/presentation/pages/login_page.dart';
+import 'features/auth/presentation/providers/auth_provider.dart';
+import 'features/employer/ui/pages/employer_main_shell.dart';
+import 'features/freelancer/ui/pages/freelancer_main_shell.dart';
+import 'shared/enums/user_role.dart';
+import 'firebase_options.dart';
 
 Future<void> main() async {
-  runZonedGuarded(() async {
+  await runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
-
-    // Sertifika bypass sınıfını küresel olarak aktif eden satır:
-    HttpOverrides.global = MyHttpOverrides();
-
     try {
-      // 0. Environment Dosyasını Yükle
-      await dotenv.load(fileName: ".env");
+      await dotenv.load(fileName: '.env');
 
-      // 1. Firebase Altyapısı
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
 
-      // 2. Supabase Altyapısı (.env dosyasından okur)
+      final supabaseUrl = dotenv.env['SUPABASE_URL'];
+      final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'];
+      if (supabaseUrl == null || supabaseUrl.isEmpty ||
+          supabaseAnonKey == null || supabaseAnonKey.isEmpty) {
+        throw StateError('Supabase environment variables are missing.');
+      }
+
       await Supabase.initialize(
-        url: dotenv.env['SUPABASE_URL'] ?? '',
-        anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
+        url: supabaseUrl,
+        anonKey: supabaseAnonKey,
         authOptions: const FlutterAuthClientOptions(
           authFlowType: AuthFlowType.pkce,
         ),
       );
 
-      await NotificationHelper.initNotifications();
-
-    } catch (e) {
-      debugPrint(' 🚨 [SaaS Kritik Hata] Başlatma esnasında sorun oluştu: $e');
-    }
-
-    final session = Supabase.instance.client.auth.currentSession;
-    final userRole = Supabase.instance.client.auth.currentUser?.userMetadata?['role']?.toString().toLowerCase();
-
-    String targetInitialRoute = RouteNames.login;
-
-    if (session != null) {
-      if (userRole == 'employer') {
-        targetInitialRoute = RouteNames.employerShell;
-      } else {
-        targetInitialRoute = RouteNames.freelancerShell;
+      final stripePublishableKey = dotenv.env['STRIPE_PUBLISHABLE_KEY'];
+      if (stripePublishableKey == null || stripePublishableKey.isEmpty) {
+        throw StateError('STRIPE_PUBLISHABLE_KEY is missing.');
       }
+      Stripe.publishableKey = stripePublishableKey;
+      Stripe.merchantIdentifier = 'Taskora';
+      Stripe.urlScheme = 'taskora';
+      await Stripe.instance.applySettings();
+
+      RealtimeManager.instance.initialize();
+      await NotificationHelper.initNotifications();
+    } catch (error, stack) {
+      debugPrint('Taskora bootstrap failed: $error\n$stack');
     }
 
-    runApp(
-      ProviderScope(
-        child: TaskoraApp(initialRoute: targetInitialRoute),
-      ),
-    );
+    runApp(const ProviderScope(child: TaskoraApp()));
   }, (Object error, StackTrace stack) {
-    debugPrint(' 🚨 [SaaS Global Asenkron Hata]: $error');
+    debugPrint('Taskora uncaught error: $error\n$stack');
   });
 }
 
 class TaskoraApp extends ConsumerWidget {
-  final String initialRoute;
-
-  const TaskoraApp({
-    super.key,
-    required this.initialRoute,
-  });
+  const TaskoraApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -89,10 +75,8 @@ class TaskoraApp extends ConsumerWidget {
       title: 'Taskora',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-
-      initialRoute: initialRoute,
+      home: const _AuthGate(),
       onGenerateRoute: AppRouter.onGenerateRoute,
-
       localizationsDelegates: const [
         DefaultMaterialLocalizations.delegate,
         DefaultWidgetsLocalizations.delegate,
@@ -103,5 +87,34 @@ class TaskoraApp extends ConsumerWidget {
       ],
       locale: const Locale('en', 'US'),
     );
+  }
+}
+
+class _AuthGate extends ConsumerWidget {
+  const _AuthGate();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(authProvider);
+
+    if (auth.isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!auth.isLoggedIn || auth.user == null) {
+      return const LoginPage();
+    }
+
+    switch (auth.user!.role) {
+      case UserRole.admin:
+      case UserRole.superAdmin:
+        return const AdminGuard(child: AdminDashboardPage());
+      case UserRole.employer:
+        return const EmployerMainShell();
+      case UserRole.freelancer:
+        return const FreelancerMainShell();
+    }
   }
 }

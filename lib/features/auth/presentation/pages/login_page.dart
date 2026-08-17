@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/config/app_constants.dart';
-import '../../../../app/router/route_names.dart';
 import '../../../../app/theme/app_colors.dart';
-import '../../../../shared/enums/user_role.dart';
 import '../../../notification/data/services/notification_helper.dart'; // 🚀 EKLENDİ
 import '../providers/auth_state.dart';
 import 'register_page.dart';
@@ -53,43 +51,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     // 🚀 GİRİŞ BAŞARILI OLDUĞUNDA FCM TOKEN'I VERİTABANINA YAZ
     await NotificationHelper.saveFcmToken();
 
-    final user = authState.user;
-    final role = user?.role;
-
-    debugPrint('*** GİRİŞ YAPAN KULLANICI ROLÜ: $role | RAW: ${user?.role.name} ***');
-
-    // 1. ADMIN KONTROLÜ
-    if (role == UserRole.admin || role?.name.toLowerCase() == 'admin') {
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        RouteNames.adminDashboard,
-            (_) => false,
-      );
-      return;
-    }
-
-    // 2. EMPLOYER KONTROLÜ
-    if (role == UserRole.employer || role?.name.toLowerCase() == 'employer') {
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        RouteNames.employerShell,
-            (_) => false,
-      );
-      return;
-    }
-
-    // 3. FREELANCER KONTROLÜ
-    if (role == UserRole.freelancer || role?.name.toLowerCase() == 'freelancer') {
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        RouteNames.freelancerShell,
-            (_) => false,
-      );
-      return;
-    }
-
-    // Hiçbirine uymazsa
-    Navigator.pushNamed(context, RouteNames.roleSelection);
+    // AuthGate observes authProvider and selects the role surface.
   }
 
   @override

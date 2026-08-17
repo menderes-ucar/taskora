@@ -7,6 +7,7 @@ import '../../../../app/theme/app_colors.dart';
 import '../../../../core/widgets/primary_button.dart';
 import '../../../auth/presentation/providers/auth_state.dart';
 import '../../../wallet/providers/wallet_provider.dart';
+import '../../../notification/presentation/pages/notification_settings_page.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -91,6 +92,12 @@ class SettingsPage extends ConsumerWidget {
         children: [
           _buildSectionTitle('GENEL AYARLAR'),
           _SettingsTile(
+            icon: Icons.business_outlined,
+            title: 'Organizasyon',
+            subtitle: 'Ekip üyeleri ve davet yönetimi',
+            onTap: () => Navigator.pushNamed(context, RouteNames.organization),
+          ),
+          _SettingsTile(
             icon: Icons.dark_mode_outlined,
             title: 'Tema',
             subtitle: 'Sistem Teması aktif',
@@ -104,11 +111,12 @@ class SettingsPage extends ConsumerWidget {
             icon: Icons.notifications_none_rounded,
             title: 'Bildirimler',
             subtitle: 'Anlık Bildirim İzinleri',
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Bildirim izinleri sistem paneline yönlendiriliyor...')),
-              );
-            },
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const NotificationSettingsPage(),
+              ),
+            ),
           ),
           _SettingsTile(
             icon: Icons.language_rounded,

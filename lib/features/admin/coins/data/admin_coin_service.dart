@@ -12,11 +12,9 @@ class AdminCoinService {
           .select()
           .order('created_at', ascending: false);
 
-      final List<dynamic> data = response as List<dynamic>;
-
+      final data = response as List<dynamic>;
       return data.map((user) {
         final map = Map<String, dynamic>.from(user as Map);
-        // 🚀 AuthUser.fromMap burada sorunsuz çalışacaktır:
         return AuthUser.fromMap(map);
       }).toList();
     } catch (e, stack) {
@@ -25,22 +23,57 @@ class AdminCoinService {
     }
   }
 
+  /// The client sends only the target and signed delta. The database derives
+  /// the authoritative before/after balance, enforces admin RBAC, locks the
+  /// target ledger row and records an immutable coin transaction.
   Future<void> adjustUserBalance({
     required String userId,
     required double currentBalance,
     required double amountToAdd,
     required String adminNote,
   }) async {
+    final normalizedUserId = userId.trim();
+    final note = adminNote.trim();
+
+    if (normalizedUserId.isEmpty) {
+      throw ArgumentError('userId boş olamaz.');
+    }
+    if (amountToAdd == 0 || !amountToAdd.isFinite) {
+      throw ArgumentError('Coin değişimi sıfır olamaz.');
+    }
+    if (note.length < 3 || note.length > 500) {
+      throw ArgumentError('Admin notu 3-500 karakter arasında olmalıdır.');
+    }
+
     try {
-      await _supabase.rpc('adjust_user_balance_atomic', params: {
-        'p_user_id': userId,
-        'p_amount': amountToAdd,
-        'p_transaction_type': amountToAdd > 0 ? 'admin_credit' : 'admin_deduction',
-        'p_description': 'Admin İşlemi: $adminNote',
-      });
+      await _supabase.rpc(
+        'admin_adjust_coins_secure',
+        params: {
+          'p_user_id': normalizedUserId,
+          'p_delta': amountToAdd,
+          'p_note': note,
+        },
+      );
+    } on PostgrestException catch (e) {
+      debugPrint('🚨 [AdminCoinService Hata]: ${e.message}');
+      throw Exception(_mapCoinError(e));
     } catch (e) {
-      debugPrint('🚨 [adjustUserBalance Hata]: $e');
-      throw Exception('Bakiye güncellenemedi: $e');
+      throw Exception('Coin bakiyesi güncellenemedi: $e');
+    }
+  }
+
+  String _mapCoinError(PostgrestException error) {
+    switch (error.message) {
+      case 'not_authorized':
+        return 'Bu işlem için yetkiniz yok.';
+      case 'target_not_found':
+        return 'Kullanıcı bulunamadı.';
+      case 'invalid_delta':
+        return 'Geçersiz coin miktarı.';
+      case 'insufficient_coins':
+        return 'Kullanıcının coin bakiyesi yetersiz.';
+      default:
+        return error.message;
     }
   }
 }

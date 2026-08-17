@@ -6,6 +6,7 @@ import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/supabase_auth_repository.dart';
 import '../../domain/entities/auth_user.dart';
 import '../../../../shared/enums/user_role.dart';
+import '../../../notification/data/services/notification_helper.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return SupabaseAuthRepository(sb.Supabase.instance.client);
@@ -17,7 +18,9 @@ class AuthState {
   final AuthUser? user;
   final String? errorMessage;
 
-  bool get isAdmin => user?.role == UserRole.admin;
+  bool get isAdmin => user?.role.isAdminRole ?? false;
+
+  bool get isSuperAdmin => user?.role == UserRole.superAdmin;
 
   const AuthState({
     this.isLoading = false,
@@ -56,10 +59,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   void _initAuthListener() {
     _authSubscription = sb.Supabase.instance.client.auth.onAuthStateChange.listen((data) {
-      if (data.event == sb.AuthChangeEvent.signedIn) {
-        restoreSession();
-      } else if (data.event == sb.AuthChangeEvent.signedOut) {
-        state = AuthState.initial();
+      switch (data.event) {
+        case sb.AuthChangeEvent.signedOut:
+        case sb.AuthChangeEvent.userDeleted:
+          state = AuthState.initial();
+          break;
+        case sb.AuthChangeEvent.userUpdated:
+        case sb.AuthChangeEvent.tokenRefreshed:
+        case sb.AuthChangeEvent.mfaChallengeVerified:
+          unawaited(restoreSession());
+          break;
+        case sb.AuthChangeEvent.initialSession:
+        case sb.AuthChangeEvent.signedIn:
+        case sb.AuthChangeEvent.passwordRecovery:
+          break;
       }
     });
   }
@@ -73,6 +86,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return;
       }
       state = state.copyWith(isLoading: false, isLoggedIn: true, user: user);
+
+      await NotificationHelper.saveFcmToken();
     } catch (e) {
       state = state.copyWith(isLoading: false, errorMessage: e.toString());
     }
@@ -83,6 +98,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       final user = await _repository.signIn(email: email, password: password);
       state = state.copyWith(isLoading: false, isLoggedIn: true, user: user);
+
+      await NotificationHelper.saveFcmToken();
+
       return true;
     } catch (e) {
       state = state.copyWith(isLoading: false, errorMessage: e.toString());
@@ -115,6 +133,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         hourlyRate: hourlyRate,
       );
       state = state.copyWith(isLoading: false, isLoggedIn: true, user: user);
+
+      await NotificationHelper.saveFcmToken();
+
       return true;
     } catch (e) {
       state = state.copyWith(isLoading: false, errorMessage: e.toString());
@@ -163,6 +184,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
+    await NotificationHelper.clearCurrentDeviceToken();
     await _repository.signOut();
     state = AuthState.initial();
   }

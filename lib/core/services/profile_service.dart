@@ -1,8 +1,8 @@
-// lib/core/services/profile_service.dart
+
 
 import 'dart:io';
 
-import 'package:supabase_flutter/supabase_flutter.dart' hide Provider;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../error/app_exception.dart';
 import '../../shared/models/user_model.dart';
@@ -210,17 +210,24 @@ class SupabaseProfileService implements IProfileService {
         imageFile,
         fileOptions: const FileOptions(
           upsert: true,
+          contentType: 'image/jpeg',
+          cacheControl: '3600',
         ),
       );
 
+      // Keep one stable storage object per user while versioning the URL so
+      // clients do not keep displaying a cached previous avatar.
       final publicUrl = _supabase.storage
           .from('profiles')
           .getPublicUrl(filename);
 
+      final versionedUrl =
+          '$publicUrl?v=${DateTime.now().millisecondsSinceEpoch}';
+
       await _supabase
           .from('users')
           .update({
-        'avatar_url': publicUrl,
+        'avatar_url': versionedUrl,
       })
           .eq('id', userId);
     } catch (e) {

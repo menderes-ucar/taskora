@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 import '../../../../app/theme/app_colors.dart';
-import '../../providers/transactions_provider.dart';
 import '../../providers/wallet_provider.dart';
-import '../../../../shared/enums/transaction_type.dart';
+
 
 class WithdrawPage extends ConsumerStatefulWidget {
   final String userId;
@@ -34,6 +35,9 @@ class _WithdrawPageState extends ConsumerState<WithdrawPage> {
 
   Future<void> _submitWithdrawal(double currentBalance) async {
     final amount = double.tryParse(_amountController.text.trim()) ?? 0;
+    final bankName = _bankNameController.text.trim();
+    final bankAccount = _bankAccountController.text.trim();
+    final idempotencyKey = const Uuid().v4();
 
     if (amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -51,27 +55,42 @@ class _WithdrawPageState extends ConsumerState<WithdrawPage> {
 
     if (amount < 10) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Minimum çekim tutarı ₺10\'dir')),
+          const SnackBar(content: Text('Minimum çekim tutarı ₺10 dir')),
+          );
+              return;
+              }
+
+              if (bankName.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Lütfen banka adını girin')),
       );
       return;
-    }
+      }
 
-    setState(() => _isLoading = true);
+          if (bankAccount.length < 8) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Lütfen geçerli bir IBAN / hesap numarası girin')),
+        );
+        return;
+      }
 
-    try {
-      // Bakiyeden düş
-      await ref.read(walletProvider.notifier).deposit(-amount);
+      setState(() => _isLoading = true);
 
-      // İşlem geçmişine yaz
-      await ref.read(transactionsProvider.notifier).addTransaction(
-        amount: amount,
-        type: TransactionType.withdrawal,
-        title: 'Para Çekme Talebi',
-        description: '${_bankNameController.text.trim()} hesabına transfer talebi.',
-        isIncome: false,
-      );
+      try {
+        // Balance deduction + payout creation + withdrawal ledger entry happen
+        // in one PostgreSQL transaction. The client never updates wallet balance.
+        await Supabase.instance.client.rpc(
+          'create_payout_request_atomic',
+          params: {
+            'p_amount': amount,
+            'p_bank_name': bankName,
+            'p_bank_account': bankAccount,
+            'p_idempotency_key': idempotencyKey,
+          },
+        );
 
-      if (mounted) {
+        if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Para çekme talebi başarıyla oluşturuldu!'),
@@ -79,17 +98,36 @@ class _WithdrawPageState extends ConsumerState<WithdrawPage> {
           ),
         );
         Navigator.pop(context);
-      }
-    } catch (e) {
-      if (mounted) {
+      } on PostgrestException catch (e) {
+        if (!mounted) return;
+
+        final message = switch (e.message) {
+          'insufficient_wallet_balance' => 'Yetersiz bakiye.',
+          'wallet_not_found' => 'Cüzdan bulunamadı. Lütfen tekrar deneyin.',
+          'minimum_payout_is_10' => 'Minimum çekim tutarı ₺10 dir.',
+        'invalid_bank_account' => 'Geçersiz banka hesap bilgisi.',
+        _ => 'Para çekme talebi oluşturulamadı.',
+        };
+
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Hata: $e')),
+          SnackBar(
+            content: Text(message),
+            backgroundColor: AppColors.danger,
+          ),
         );
+      } catch (e) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Hata: $e'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
       }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
-  }
 
   @override
   Widget build(BuildContext context) {

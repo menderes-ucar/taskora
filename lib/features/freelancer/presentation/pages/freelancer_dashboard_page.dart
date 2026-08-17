@@ -1,26 +1,29 @@
-// lib/features/freelancer/presentation/pages/freelancer_dashboard_page.dart
+
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide Provider; // Supabase'deki Provider ismini gizleyerek çakışmayı çözdük
+import 'package:supabase_flutter/supabase_flutter.dart' ;
+import 'package:taskora/shared/enums/contract_status.dart';
 
-import '../../../../app/theme/app_colors.dart'; // Önceki sayfada kullandığımız ana tema renk dosyan
-import '../../../../core/services/contract_service.dart';
+import '../../../../app/theme/app_colors.dart';
+import '../../../../shared/models/contract_model.dart';
 import '../../../../core/services/wallet_services.dart';
+import '../../../contracts/logic/contracts_provider.dart';
 
-final activeContractsProvider = FutureProvider.family<dynamic, String>((ref, userId) async {
-  final contractService = ref.read(contractServiceProvider);
-  return contractService.getActiveContracts(userId);
+final activeContractsProvider =
+FutureProvider.family<List<ContractModel>, String>((ref, userId) async {
+  final repository = ref.read(contractRepositoryProvider);
+
+  final contracts = await repository.getByFreelancer(userId);
+
+  return contracts
+      .where((contract) => contract.status.isActive)
+      .toList(growable: false);
 });
 
 final walletProvider = FutureProvider.family<dynamic, String>((ref, userId) async {
   final walletService = ref.read(walletServiceProvider);
   return walletService.getWallet(userId);
-});
-
-// Riverpod Provider kullanımı çakışma giderildiği için artık güvenli
-final contractServiceProvider = Provider<IContractService>((ref) {
-  return SupabaseContractService(ref.read(supabaseClientProvider));
 });
 
 final walletServiceProvider = Provider<IWalletService>((ref) {
@@ -159,7 +162,7 @@ class FreelancerDashboardPage extends ConsumerWidget {
         const SizedBox(height: 12),
         contractsAsync.when(
           data: (contracts) {
-            final list = contracts is List ? contracts : [];
+            final list = contracts;
             if (list.isEmpty) {
               return const Center(
                 child: Padding(
@@ -182,33 +185,52 @@ class FreelancerDashboardPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildContractCard(dynamic contract) {
+  Widget _buildContractCard(ContractModel contract) {
     return Card(
       color: AppColors.white,
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+      ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 8,
+        ),
         title: Text(
-          contract['job_title'] ?? 'İş Başlığı',
-          style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.black),
+          contract.jobTitle,
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            color: AppColors.black,
+          ),
         ),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 4.0),
           child: Text(
-            '₺${contract['agreed_amount'] ?? '0'} • ${contract['delivery_days'] ?? 0} Gün',
-            style: const TextStyle(color: AppColors.grey, fontWeight: FontWeight.w500),
+            '₺${contract.agreedAmount.toStringAsFixed(2)} • '
+                '${contract.deliveryDays} Gün',
+            style: const TextStyle(
+              color: AppColors.grey,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
         trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 6,
+          ),
           decoration: BoxDecoration(
             color: AppColors.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Text(
-            contract['status'] ?? 'aktif',
-            style: const TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.w700, fontSize: 13),
+            contract.status.label,
+            style: const TextStyle(
+              color: AppColors.primaryDark,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
           ),
         ),
       ),

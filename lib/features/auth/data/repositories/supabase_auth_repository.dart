@@ -13,32 +13,37 @@ class SupabaseAuthRepository implements AuthRepository {
     final currentUser = _client.auth.currentUser;
     if (currentUser == null) return null;
 
-    try {
-      final profile = await _client
-          .from('profiles')
-          .select()
-          .eq('id', currentUser.id)
-          .single();
+    final profile = await _client
+        .from('profiles')
+        .select()
+        .eq('id', currentUser.id)
+        .maybeSingle();
 
-      return AuthUser.fromMap(
-        profile,
-        emailVerified: currentUser.emailConfirmedAt != null,
+    if (profile == null) {
+      throw StateError(
+        'Authenticated user has no profile. Check profile provisioning and RLS.',
       );
-    } catch (e) {
-      return null;
     }
+
+    return AuthUser.fromMap(
+      profile,
+      emailVerified: currentUser.emailConfirmedAt != null,
+    );
   }
 
   @override
-  Future<AuthUser> signIn({required String email, required String password}) async {
+  Future<AuthUser> signIn({
+    required String email,
+    required String password,
+  }) async {
     await _client.auth.signInWithPassword(
       email: email.trim(),
-      password: password.trim(),
+      password: password,
     );
 
     final user = await restoreSession();
     if (user == null) {
-      throw Exception('Giriş başarılı ancak profil bilgisi alınamadı.');
+      throw StateError('Giriş başarılı ancak profil bilgisi alınamadı.');
     }
     return user;
   }
@@ -55,62 +60,59 @@ class SupabaseAuthRepository implements AuthRepository {
     String? title,
     double? hourlyRate,
   }) async {
+    if (!role.isSelfAssignable) {
+      throw StateError('Bu rol kayıt ekranından atanamaz.');
+    }
+
     final fullName = '$firstName $lastName'.trim();
 
     final authResponse = await _client.auth.signUp(
       email: email.trim(),
-      password: password.trim(),
+      password: password,
       data: {
         'name': fullName,
-        'role': role.name,
-      },
-    );
-
-    final sessionUser = authResponse.user;
-
-    if (sessionUser != null) {
-      await _client.from('profiles').upsert({
-        'id': sessionUser.id,
-        'name': fullName,
-        'email': email.trim(),
         'role': role.name,
         'company_name': companyName,
         'industry': industry,
         'title': title,
         'hourly_rate': hourlyRate,
-        'coins': 50,
-        'subscription_tier': 'free',
-        'is_subscribed': false,
-        'active_job_limit': 3,
-        'proposal_limit': 10,
-        'created_at': DateTime.now().toIso8601String(),
-      });
+      },
+    );
+
+    // Profile provisioning is performed by the database trigger.
+    // The client must not be responsible for coins, subscription or entitlements.
+    final sessionUser = authResponse.user;
+    if (sessionUser == null) {
+      throw StateError('Kayıt oluşturulamadı.');
     }
 
     final user = await restoreSession();
     if (user == null) {
-      throw Exception('Kayıt oluşturuldu, lütfen giriş yapın.');
+      throw StateError('Kayıt oluşturuldu, profil hazırlanamadı.');
     }
     return user;
   }
 
   @override
   Future<AuthUser> updateRole(UserRole role) async {
-    final currentUser = _client.auth.currentUser;
-    if (currentUser == null) throw Exception('Oturum bulunamadı.');
+    if (!role.isSelfAssignable) {
+      throw StateError('Bu rol bu akıştan atanamaz.');
+    }
 
-    await _client.from('profiles').update({
-      'role': role.name,
-      'updated_at': DateTime.now().toIso8601String(),
-    }).eq('id', currentUser.id);
+    final currentUser = _client.auth.currentUser;
+    if (currentUser == null) throw StateError('Oturum bulunamadı.');
+
+    await _client.rpc('update_own_role', params: {
+      'p_role': role.name,
+    });
 
     final user = await restoreSession();
-    if (user == null) throw Exception('Rol güncellenemedi.');
+    if (user == null) throw StateError('Rol güncellenemedi.');
     return user;
   }
 
   @override
-  Future<void> signOut() async => await _client.auth.signOut();
+  Future<void> signOut() => _client.auth.signOut();
 
   @override
   Future<void> resetPassword(String email) async {
@@ -120,19 +122,23 @@ class SupabaseAuthRepository implements AuthRepository {
   @override
   Future<void> resendVerificationEmail() async {
     final currentUser = _client.auth.currentUser;
-    if (currentUser?.email == null) throw Exception('Aktif kullanıcı e-postası bulunamadı.');
+    final email = currentUser?.email;
+    if (email == null || email.isEmpty) {
+      throw StateError('Aktif kullanıcı e-postası bulunamadı.');
+    }
+
     await _client.auth.resend(
       type: sb.OtpType.signup,
-      email: currentUser!.email!,
+      email: email,
     );
   }
 
   @override
   Future<void> deleteAccount() async {
-    final currentUser = _client.auth.currentUser;
-    if (currentUser == null) return;
+    if (_client.auth.currentUser == null) return;
 
-    await _client.from('profiles').delete().eq('id', currentUser.id);
+    // The RPC owns the deletion boundary so dependent rows and auth.users
+    // are handled atomically/server-side. The client never deletes profiles directly.
     await _client.rpc('delete_user_account');
     await signOut();
   }

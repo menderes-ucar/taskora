@@ -1,8 +1,7 @@
-import 'package:supabase_flutter/supabase_flutter.dart' hide Provider;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/coin/data/services/coin_service.dart';
 import '../../features/notification/data/services/notification_helper.dart';
-import '../../shared/models/coin_model.dart';
 import '../../shared/models/proposal_model.dart';
 import '../error/app_exception.dart';
 
@@ -165,21 +164,19 @@ class SupabaseProposalService implements IProposalService {
       ProposalModel proposal,
       ) async {
     try {
-      final proposalData = {
-        'amount': proposal.amount,
-        'cover_letter': proposal.coverLetter,
-        'delivery_days': proposal.deliveryDays,
-        'updated_at': DateTime.now().toIso8601String(),
-      };
+      final response = await _supabase.rpc(
+        'update_proposal_secure',
+        params: {
+          'p_proposal_id': proposalId,
+          'p_amount': proposal.amount,
+          'p_delivery_days': proposal.deliveryDays,
+          'p_cover_letter': proposal.coverLetter,
+        },
+      );
 
-      final response = await _supabase
-          .from('proposals')
-          .update(proposalData)
-          .eq('id', proposalId)
-          .select()
-          .single();
-
-      return ProposalModel.fromJson(response);
+      return ProposalModel.fromJson(
+        Map<String, dynamic>.from(response as Map),
+      );
     } catch (e) {
       throw ExceptionFactory.create(e, StackTrace.current);
     }
@@ -188,52 +185,13 @@ class SupabaseProposalService implements IProposalService {
   @override
   Future<void> acceptProposal(String proposalId) async {
     try {
-      final proposalResponse = await _supabase
-          .from('proposals')
-          .select('''
-            *,
-            job:job_id(title, employer_id)
-          ''')
-          .eq('id', proposalId)
-          .single();
-
-      final String jobId = proposalResponse['job_id'] as String;
-      final String freelancerId = proposalResponse['freelancer_id'] as String;
-      final String freelancerName = proposalResponse['freelancer_name'] as String? ?? 'Freelancer';
-      final double amount = (proposalResponse['amount'] as num).toDouble();
-      final int deliveryDays = proposalResponse['delivery_days'] as int;
-
-      final String employerId = proposalResponse['job']?['employer_id'] ??
-          _supabase.auth.currentUser?.id ?? '';
-      final String jobTitle = proposalResponse['job']?['title'] ?? 'Kabul Edilen Proje';
-
-      await _supabase
-          .from('proposals')
-          .update({
-        'status': 'accepted',
-        'accepted_at': DateTime.now().toIso8601String(),
-      })
-          .eq('id', proposalId);
-
-      await _supabase
-          .from('jobs')
-          .update({'status': 'inProgress'})
-          .eq('id', jobId);
-
-      await _supabase.from('contracts').insert({
-        'job_id': jobId,
-        'employer_id': employerId,
-        'freelancer_id': freelancerId,
-        'job_title': jobTitle,
-        'freelancer_name': freelancerName,
-        'agreed_amount': amount,
-        'delivery_days': deliveryDays,
-        'status': 'active',
-        'payment_status': 'pending',
-        'created_at': DateTime.now().toIso8601String(),
-      });
-
-      print('✅ Teklif kabul edildi ve aktif projeler listesine yeni kontrat eklendi!');
+      await _supabase.rpc(
+        'change_proposal_status_rpc',
+        params: {
+          'p_proposal_id': proposalId,
+          'p_status': 'accepted',
+        },
+      );
     } catch (e) {
       throw ExceptionFactory.create(e, StackTrace.current);
     }
@@ -242,13 +200,13 @@ class SupabaseProposalService implements IProposalService {
   @override
   Future<void> rejectProposal(String proposalId) async {
     try {
-      await _supabase
-          .from('proposals')
-          .update({
-        'status': 'rejected',
-        'rejected_at': DateTime.now().toIso8601String(),
-      })
-          .eq('id', proposalId);
+      await _supabase.rpc(
+        'change_proposal_status_rpc',
+        params: {
+          'p_proposal_id': proposalId,
+          'p_status': 'rejected',
+        },
+      );
     } catch (e) {
       throw ExceptionFactory.create(e, StackTrace.current);
     }
@@ -257,13 +215,10 @@ class SupabaseProposalService implements IProposalService {
   @override
   Future<void> withdrawProposal(String proposalId) async {
     try {
-      await _supabase
-          .from('proposals')
-          .update({
-        'status': 'withdrawn',
-        'withdrawn_at': DateTime.now().toIso8601String(),
-      })
-          .eq('id', proposalId);
+      await _supabase.rpc(
+        'withdraw_proposal_secure',
+        params: {'p_proposal_id': proposalId},
+      );
     } catch (e) {
       throw ExceptionFactory.create(e, StackTrace.current);
     }
@@ -275,74 +230,25 @@ class SupabaseProposalService implements IProposalService {
     required String selectedFreelancerId,
   }) async {
     try {
-      final proposals = await _supabase
-          .from('proposals')
-          .select()
-          .eq('job_id', jobId)
-          .neq('freelancer_id', selectedFreelancerId);
-
-      for (final proposal in proposals as List) {
-        final proposalId = proposal['id'] as String;
-        final freelancerId = proposal['freelancer_id'] as String;
-        final coinCost = (proposal['coin_cost'] as num?)?.toInt() ?? 0;
-        final coinRefunded = proposal['coin_refunded'] as bool? ?? false;
-
-        if (coinRefunded || coinCost == 0) continue;
-
-        final refundAmount = (coinCost * 0.5).toInt();
-
-        await _coinService.refundCoin(
-          freelancerId,
-          refundAmount,
-          'İş başka birine verildi',
-          relatedId: proposalId,
-        );
-
-        await _supabase
-            .from('proposals')
-            .update({'coin_refunded': true})
-            .eq('id', proposalId);
-      }
+      await _supabase.rpc('refund_job_proposals_atomic', params: {
+        'p_job_id': jobId,
+        'p_selected_freelancer_id': selectedFreelancerId,
+        'p_full_refund': false,
+      });
     } catch (e) {
-      print('❌ refundCoinsForRejectedProposals error: $e');
       rethrow;
     }
   }
 
   @override
   Future<void> refundCoinsForCancelledJob(String jobId) async {
-    try {
-      final proposals = await _supabase
-          .from('proposals')
-          .select()
-          .eq('job_id', jobId)
-          .eq('status', 'pending');
-
-      for (final proposal in proposals as List) {
-        final proposalId = proposal['id'] as String;
-        final freelancerId = proposal['freelancer_id'] as String;
-        final coinCost = (proposal['coin_cost'] as num?)?.toInt() ?? 0;
-        final coinRefunded = proposal['coin_refunded'] as bool? ?? false;
-
-        if (coinRefunded || coinCost == 0) continue;
-
-        await _coinService.refundCoin(
-          freelancerId,
-          coinCost,
-          'İş iptal edildi',
-          relatedId: proposalId,
-        );
-
-        await _supabase
-            .from('proposals')
-            .update({'coin_refunded': true})
-            .eq('id', proposalId);
-      }
-    } catch (e) {
-      print('❌ refundCoinsForCancelledJob error: $e');
-      rethrow;
-    }
+    await _supabase.rpc('refund_job_proposals_atomic', params: {
+      'p_job_id': jobId,
+      'p_selected_freelancer_id': null,
+      'p_full_refund': true,
+    });
   }
+
 }
 
 // Global Standalone Yardımcı Fonksiyon (Sınıf Dışındaki Eski Çağrılar İçin)

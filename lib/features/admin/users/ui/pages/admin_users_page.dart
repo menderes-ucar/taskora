@@ -63,7 +63,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
     final q = query.toLowerCase().trim();
     setState(() {
       _filteredUsers = _allUsers.where((u) {
-        final name = (u.name ?? '').toLowerCase();
+        final name = u.name.toLowerCase();
         final email = u.email.toLowerCase();
         return name.contains(q) || email.contains(q);
       }).toList();
@@ -71,7 +71,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
   }
 
   Future<void> _toggleBan(UserModel user) async {
-    final newBanStatus = !(user.isBanned ?? false);
+    final newBanStatus = !user.isBanned;
     final actionText = newBanStatus ? 'banlamak' : 'engelini kaldırmak';
 
     final confirm = await showDialog<bool>(
@@ -165,7 +165,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                 itemCount: _filteredUsers.length,
                 itemBuilder: (context, i) {
                   final user = _filteredUsers[i];
-                  final isBanned = user.isBanned ?? false;
+                  final isBanned = user.isBanned;
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
@@ -188,7 +188,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                         ),
                       ),
                       title: Text(
-                        user.name?.isNotEmpty == true ? user.name! : 'İsimsiz Kullanıcı',
+                        user.name.isNotEmpty ? user.name : 'İsimsiz Kullanıcı',
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -228,7 +228,7 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
                           ),
                         ],
                       ),
-                      trailing: user.role == UserRole.admin
+                      trailing: user.role.isAdminRole
                           ? const SizedBox.shrink() // Admin kendini banlayamasın
                           : IconButton(
                         icon: Icon(
@@ -252,6 +252,8 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
     switch (role) {
       case UserRole.admin:
         return Colors.purple;
+      case UserRole.superAdmin:
+        return Colors.deepPurple;
       case UserRole.employer:
         return AppColors.primary;
       case UserRole.freelancer:
@@ -263,6 +265,8 @@ class _AdminUsersPageState extends State<AdminUsersPage> {
     switch (role) {
       case UserRole.admin:
         return Icons.security_rounded;
+      case UserRole.superAdmin:
+        return Icons.admin_panel_settings_rounded;
       case UserRole.employer:
         return Icons.business_center_rounded;
       case UserRole.freelancer:

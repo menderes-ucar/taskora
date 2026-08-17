@@ -1,10 +1,9 @@
-import '../error/app_exception.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../shared/models/user_model.dart';
 
 class SubscriptionService {
-  // Gelecekte buraya RevenueCat SDK entegrasyonu gelecek:
-  // Purchases.addCustomerInfoUpdateListener((info) { ... });
+
 
   /// Kullanıcının mevcut paketine göre limit aşımı yapıp yapmadığını kontrol eder.
   bool hasReachedLimit({

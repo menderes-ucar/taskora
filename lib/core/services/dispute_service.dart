@@ -100,47 +100,43 @@ class SupabaseDisputeService implements IDisputeService {
     required String reason,
     required String description,
   }) async {
+    final currentUserId = _supabase.auth.currentUser?.id;
+    if (currentUserId == null) {
+      throw AppException(
+        message: 'Kullanıcı oturumu bulunamadı.',
+        type: AppExceptionType.authentication,
+      );
+    }
+
+    if (reason.trim().length < 5) {
+      throw AppException(
+        message: 'Uyuşmazlık nedeni en az 5 karakter olmalıdır.',
+        type: AppExceptionType.validation,
+      );
+    }
+
     try {
-      final currentUserId = _supabase.auth.currentUser?.id;
+      final result = await _supabase.rpc(
+        'open_dispute_secure',
+        params: {
+          'p_contract_id': contractId,
+          'p_reason': reason.trim(),
+          'p_description': description.trim(),
+        },
+      );
 
-      if (currentUserId == null) {
+      final disputeId = (result as Map<String, dynamic>?)?['dispute_id']?.toString();
+      if (disputeId == null || disputeId.isEmpty) {
         throw AppException(
-          message: 'Kullanıcı oturumu bulunamadı.',
-          type: AppExceptionType.authentication,
-        );
-      }
-      final existing = await _supabase
-          .from('disputes')
-          .select()
-          .eq('contract_id', contractId)
-          .eq('status', 'open')
-          .maybeSingle();
-
-      if (existing != null) {
-        throw AppException(
-          message: 'A dispute is already open for this contract',
-          type: AppExceptionType.validation,
+          message: 'Dispute oluşturulamadı.',
+          type: AppExceptionType.serverError,
         );
       }
 
-      final response = await _supabase
-          .from('disputes')
-          .insert({
-        'contract_id': contractId,
-        'raised_by': currentUserId,
-        'reason': reason,
-        'description': description,
-        'status': 'open',
-        'created_at': DateTime.now().toIso8601String(),
-      })
-          .select()
-          .single();
-
-      return DisputeModel.fromJson(response);
+      return getDisputeDetail(disputeId);
     } catch (e) {
       throw ExceptionFactory.create(e, StackTrace.current);
     }
-
   }
 
   @override
@@ -149,28 +145,32 @@ class SupabaseDisputeService implements IDisputeService {
       File file,
       ) async {
     try {
-      final filename =
-          'dispute_${disputeId}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final currentUserId = _supabase.auth.currentUser?.id;
+      if (currentUserId == null) {
+        throw AppException(
+          message: 'Kullanıcı oturumu bulunamadı.',
+          type: AppExceptionType.authentication,
+        );
+      }
 
-      await _supabase.storage
-          .from('disputes')
-          .upload(
+      final filename =
+          '$currentUserId/disputes/$disputeId/${DateTime.now().millisecondsSinceEpoch}_${file.uri.pathSegments.isNotEmpty ? file.uri.pathSegments.last : 'evidence'}';
+
+      await _supabase.storage.from('disputes').upload(
         filename,
         file,
-        fileOptions: const FileOptions(
-          upsert: true,
-        ),
+        fileOptions: const FileOptions(upsert: false),
       );
 
-      final fileUrl = _supabase.storage
-          .from('disputes')
-          .getPublicUrl(filename);
+      final fileUrl = _supabase.storage.from('disputes').getPublicUrl(filename);
 
-      await _supabase.from('dispute_evidence').insert({
-        'dispute_id': disputeId,
-        'file_url': fileUrl,
-        'uploaded_at': DateTime.now().toIso8601String(),
-      });
+      await _supabase.rpc(
+        'add_dispute_evidence_secure',
+        params: {
+          'p_dispute_id': disputeId,
+          'p_file_url': fileUrl,
+        },
+      );
     } catch (e) {
       throw ExceptionFactory.create(e, StackTrace.current);
     }
@@ -179,14 +179,23 @@ class SupabaseDisputeService implements IDisputeService {
   @override
   Future<void> resolveDispute(String disputeId, String resolution) async {
     try {
-      await _supabase
-          .from('disputes')
-          .update({
-        'status': 'resolved',
-        'resolution': resolution,
-        'resolved_at': DateTime.now().toIso8601String(),
-      })
-          .eq('id', disputeId);
+      if (resolution.trim().isEmpty) {
+        throw AppException(
+          message: 'Çözüm türü boş olamaz.',
+          type: AppExceptionType.validation,
+        );
+      }
+
+      await _supabase.rpc(
+        'admin_resolve_dispute_secure',
+        params: {
+          'p_dispute_id': disputeId,
+          'p_resolution': resolution.trim(),
+          'p_freelancer_amount': 0,
+          'p_refund_amount': 0,
+          'p_note': '',
+        },
+      );
     } catch (e) {
       throw ExceptionFactory.create(e, StackTrace.current);
     }
@@ -195,10 +204,12 @@ class SupabaseDisputeService implements IDisputeService {
   @override
   Future<void> closeDispute(String disputeId) async {
     try {
-      await _supabase
-          .from('disputes')
-          .update({'status': 'closed'})
-          .eq('id', disputeId);
+      await _supabase.rpc(
+        'admin_close_dispute_secure',
+        params: {
+          'p_dispute_id': disputeId,
+        },
+      );
     } catch (e) {
       throw ExceptionFactory.create(e, StackTrace.current);
     }

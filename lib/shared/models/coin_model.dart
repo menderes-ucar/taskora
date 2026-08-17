@@ -5,6 +5,7 @@ enum CoinTransactionType {
   purchase,      // Coin satın alma
   proposal,      // Teklif için harcama
   message,       // Mesaj için harcama
+  jobApplication,
   refund,        // İade
   admin_add,     // Admin tarafından ekleme
   admin_deduct,  // Admin tarafından çıkarma
@@ -78,6 +79,8 @@ class CoinTransaction {
         return 'Teklif Gönderme';
       case CoinTransactionType.message:
         return 'Mesaj Gönderme';
+      case CoinTransactionType.jobApplication:  // ← EKLE BU SATIRI
+        return 'İş İlanına Başvuru';
       case CoinTransactionType.refund:
         return 'İade';
       case CoinTransactionType.admin_add:
@@ -88,6 +91,39 @@ class CoinTransaction {
   }
 
   String get formattedDate => DateFormat('dd.MM.yyyy HH:mm').format(createdAt);
+}
+
+/// Server-authoritative coin package catalog item.
+class CoinPackage {
+  final String id;
+  final String name;
+  final int coinAmount;
+  final double priceTry;
+  final bool isActive;
+  final int sortOrder;
+  final String storeProductId;
+
+  const CoinPackage({
+    required this.id,
+    required this.name,
+    required this.coinAmount,
+    required this.priceTry,
+    required this.isActive,
+    required this.sortOrder,
+    required this.storeProductId,
+  });
+
+  factory CoinPackage.fromMap(Map<String, dynamic> map) {
+    return CoinPackage(
+      id: map['id']?.toString() ?? '',
+      name: map['name']?.toString() ?? '',
+      coinAmount: (map['coin_amount'] as num?)?.toInt() ?? 0,
+      priceTry: (map['price_try'] as num?)?.toDouble() ?? 0,
+      isActive: map['is_active'] as bool? ?? false,
+      sortOrder: (map['sort_order'] as num?)?.toInt() ?? 0,
+      storeProductId: map['store_product_id']?.toString() ?? '',
+    );
+  }
 }
 
 /// Kategori bazında coin fiyatlandırması

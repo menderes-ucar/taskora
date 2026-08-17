@@ -1,6 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-
-import '../../../../app/config/coin_constants.dart';
+import 'package:uuid/uuid.dart';
 import '../../../../core/error/app_exception.dart';
 import '../../../../shared/models/coin_model.dart';
 
@@ -41,10 +40,8 @@ abstract class ICoinService {
 
   // Cüzdan Bakiyesi (TL) İle Coin Paketi Satın Alma
   Future<bool> buyCoinPackage({
-    required String userId,
-    required int coinAmount,
-    required double priceTL,
-    required String packageName,
+    required String packageId,
+    String? idempotencyKey,
   });
 
   // Admin İşlemleri
@@ -52,6 +49,7 @@ abstract class ICoinService {
   Future<void> adminDeductCoin(String userId, int amount, String reason);
 
   // Kategori Fiyatlandırması & Ayarlar
+  Future<List<CoinPackage>> getActiveCoinPackages();
   Future<List<CoinPrice>> getAllCoinPrices();
   Future<CoinPrice?> getCoinPriceByCategory(String categoryId);
   Future<void> updateCoinPrice(CoinPrice coinPrice);
@@ -83,8 +81,10 @@ class SupabaseCoinService implements ICoinService {
       if (response == null) return 0;
       return (response['coins'] as num?)?.toInt() ?? 0;
     } catch (e) {
-      print('❌ getUserCoinBalance error: $e');
-      return 0;
+      throw AppException(
+        message: 'Coin bakiyesi alınamadı: $e',
+        type: AppExceptionType.serverError,
+      );
     }
   }
 
@@ -102,8 +102,10 @@ class SupabaseCoinService implements ICoinService {
           .map((json) => CoinTransaction.fromMap(json as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      print('❌ getUserCoinTransactions error: $e');
-      return [];
+      throw AppException(
+        message: 'Coin işlem geçmişi alınamadı: $e',
+        type: AppExceptionType.serverError,
+      );
     }
   }
 
@@ -116,34 +118,40 @@ class SupabaseCoinService implements ICoinService {
         String? relatedId,
         String? description,
       }) async {
+    if (amount <= 0) {
+      throw AppException(
+        message: 'Coin miktarı 0 dan büyük olmalıdır.',
+        type: AppExceptionType.validation,
+      );
+    }
+
+    final currentUserId = _supabase.auth.currentUser?.id;
+    if (currentUserId == null) {
+      throw AppException(
+        message: 'Oturum bulunamadı.',
+        type: AppExceptionType.authentication,
+      );
+    }
+    if (currentUserId != userId) {
+      throw AppException(
+        message: 'Bu coin hesabına erişim yetkiniz yok.',
+        type: AppExceptionType.authorization,
+      );
+    }
+
     try {
-      final currentBalance = await getUserCoinBalance(userId);
-
-      if (currentBalance < amount) {
-        throw Exception('Yeterli coin bulunmamaktadır! Mevcut: $currentBalance');
-      }
-
-      final newBalance = currentBalance - amount;
-
-      await _supabase
-          .from('profiles')
-          .update({'coins': newBalance})
-          .eq('id', userId);
-
-      try {
-        await _supabase.from('coin_transactions').insert({
-          'user_id': userId,
-          'amount': -amount,
-          'type': type.name,
-          'description': description ?? 'Coin harcaması',
-          'related_id': relatedId,
-          'created_at': DateTime.now().toIso8601String(),
-          'balance_after': newBalance,
-        });
-      } catch (_) {}
+      await _supabase.rpc('deduct_coins_secure', params: {
+        'p_user_id': currentUserId,
+        'p_amount': amount,
+        'p_type': type.name,
+        'p_related_id': relatedId,
+        'p_description': description ?? 'Coin harcaması',
+      });
     } catch (e) {
-      print('❌ deductCoin error: $e');
-      rethrow;
+      throw AppException(
+        message: e.toString(),
+        type: AppExceptionType.serverError,
+      );
     }
   }
 
@@ -193,62 +201,58 @@ class SupabaseCoinService implements ICoinService {
     }
   }
 
-  /// 6. Cüzdan Bakiyesi (TL) İle Coin Paketi Satın Alma
+  /// 6. Cüzdan bakiyesi ile coin paketi satın alma.
+  /// Paket miktarı/fiyatı yalnızca server tarafından belirlenir.
   @override
   Future<bool> buyCoinPackage({
-    required String userId,
-    required int coinAmount,
-    required double priceTL,
-    required String packageName,
+    required String packageId,
+    String? idempotencyKey,
   }) async {
+    final normalizedPackageId = packageId.trim();
+    if (normalizedPackageId.isEmpty) {
+      throw AppException(
+        message: 'Geçersiz coin paketi.',
+        type: AppExceptionType.validation,
+      );
+    }
+
+    final session = _supabase.auth.currentSession;
+    if (session == null) {
+      throw AppException(
+        message: 'Oturum bulunamadı. Lütfen tekrar giriş yapın.',
+        type: AppExceptionType.authentication,
+      );
+    }
+
+    final key = (idempotencyKey?.trim().isNotEmpty ?? false)
+        ? idempotencyKey!.trim()
+        : const Uuid().v4();
+
     try {
-      final walletData = await _supabase
-          .from('wallets')
-          .select('balance')
-          .eq('user_id', userId)
-          .single();
-
-      final double currentBalance =
-          (walletData['balance'] as num?)?.toDouble() ?? 0.0;
-
-      if (currentBalance < priceTL) {
-        throw Exception(
-            'Yetersiz bakiye! Lütfen önce cüzdanınıza TL yükleyin.');
-      }
-
-      // Cüzdandan TL Düş
-      await _supabase
-          .from('wallets')
-          .update({'balance': currentBalance - priceTL})
-          .eq('user_id', userId);
-
-      // Profilde Coin Miktarını Artır
-      final int currentCoins = await getUserCoinBalance(userId);
-      final int newCoins = currentCoins + coinAmount;
-
-      await _supabase
-          .from('profiles')
-          .update({'coins': newCoins})
-          .eq('id', userId);
-
-      // İşlem Geçmişine Kaydet
-      await _supabase.from('transactions').insert({
-        'user_id': userId,
-        'amount': priceTL,
-        'type': 'coin_purchase',
-        'title': 'Coin Satın Alındı',
-        'description': '$packageName ($coinAmount Coin) satın alındı.',
-        'is_income': false,
-        'created_at': DateTime.now().toIso8601String(),
-      });
-
+      await _supabase.rpc(
+        'purchase_coin_package_atomic',
+        params: {
+          'p_package_id': normalizedPackageId,
+          'p_idempotency_key': key,
+        },
+      );
       return true;
+    } on PostgrestException catch (e) {
+      throw AppException(
+        message: _mapCoinError(e.message),
+        type: AppExceptionType.serverError,
+      );
     } catch (e) {
-      rethrow;
+      throw AppException(
+        message: e.toString(),
+        type: AppExceptionType.serverError,
+      );
     }
   }
 
-  /// 7. Coin İade Metodu
+  /// 7. Generic client-side refunds are intentionally disabled.
+  /// Marketplace refunds must go through the refund queue and the atomic
+  /// server-side refund workflow.
   @override
   Future<void> refundCoin(
       String userId,
@@ -256,80 +260,64 @@ class SupabaseCoinService implements ICoinService {
       String reason, {
         String? relatedId,
       }) async {
-    try {
-      final currentBalance = await getUserCoinBalance(userId);
-      final newBalance = currentBalance + amount;
-
-      await _supabase
-          .from('profiles')
-          .update({'coins': newBalance})
-          .eq('id', userId);
-
-      try {
-        await _supabase.from('coin_transactions').insert({
-          'user_id': userId,
-          'amount': amount,
-          'type': CoinTransactionType.refund.name,
-          'description': reason,
-          'related_id': relatedId,
-          'created_at': DateTime.now().toIso8601String(),
-          'balance_after': newBalance,
-        });
-      } catch (_) {}
-    } catch (e) {
-      print('❌ refundCoin error: $e');
-      rethrow;
-    }
+    throw AppException(
+      message: 'Doğrudan coin iadesi yapılamaz. İade akışını kullanın.',
+      type: AppExceptionType.authorization,
+    );
   }
 
-  /// 8. Kaybeden Freelancer'lara İade Dağıtımı
+  /// 8. Job teklif iadesi artık tek atomic server-side işlemle yapılır.
   @override
   Future<void> refundLosingFreelancers({
     required String jobId,
     required String acceptedFreelancerId,
   }) async {
-    try {
-      final otherProposals = await _supabase
-          .from('proposals')
-          .select('id, freelancer_id')
-          .eq('job_id', jobId)
-          .neq('freelancer_id', acceptedFreelancerId)
-          .eq('status', 'pending');
-
-      if (otherProposals == null || (otherProposals as List).isEmpty) return;
-
-      final int refundAmount =
-      (CoinConstants.sendProposalCost * CoinConstants.proposalRefundRate)
-          .toInt();
-
-      for (var prop in otherProposals) {
-        final String freelancerId = prop['freelancer_id'].toString();
-        await refundCoin(
-          freelancerId,
-          refundAmount,
-          'İlan başkasına verildiği için harcanan coin iade edildi.',
-          relatedId: jobId,
-        );
-      }
-    } catch (e) {
-      print('❌ refundLosingFreelancers error: $e');
-    }
+    await _supabase.rpc('refund_job_proposals_atomic', params: {
+      'p_job_id': jobId,
+      'p_selected_freelancer_id': acceptedFreelancerId,
+      'p_full_refund': false,
+    });
   }
 
   /// 9. Admin İşlemleri
   @override
   Future<void> adminAddCoin(String userId, int amount, String reason) async {
-    await refundCoin(userId, amount, 'Admin Eklemesi: $reason');
+    await _supabase.rpc('admin_adjust_coins_secure', params: {
+      'p_user_id': userId,
+      'p_amount': amount,
+      'p_operation': 'add',
+      'p_reason': reason,
+    });
   }
 
   @override
   Future<void> adminDeductCoin(String userId, int amount, String reason) async {
-    await deductCoin(
-      userId,
-      amount,
-      CoinTransactionType.admin_deduct,
-      description: 'Admin Kesintisi: $reason',
-    );
+    await _supabase.rpc('admin_adjust_coins_secure', params: {
+      'p_user_id': userId,
+      'p_amount': amount,
+      'p_operation': 'deduct',
+      'p_reason': reason,
+    });
+  }
+
+  @override
+  Future<List<CoinPackage>> getActiveCoinPackages() async {
+    try {
+      final response = await _supabase
+          .from('coin_packages')
+          .select('id,name,coin_amount,price_try,is_active,sort_order,store_product_id')
+          .eq('is_active', true)
+          .order('sort_order', ascending: true);
+
+      return (response as List<dynamic>)
+          .map((json) => CoinPackage.fromMap(Map<String, dynamic>.from(json as Map)))
+          .toList(growable: false);
+    } catch (e) {
+      throw AppException(
+        message: 'Coin paketleri alınamadı: $e',
+        type: AppExceptionType.serverError,
+      );
+    }
   }
 
   /// 10. Kategori Fiyatlandırması Metodları (Admin Sayfası İçin)
@@ -360,7 +348,7 @@ class SupabaseCoinService implements ICoinService {
           .maybeSingle();
 
       if (response == null) return null;
-      return CoinPrice.fromMap(response as Map<String, dynamic>);
+      return CoinPrice.fromMap(response);
     } catch (e) {
       print('❌ getCoinPriceByCategory error: $e');
       return null;
@@ -370,10 +358,10 @@ class SupabaseCoinService implements ICoinService {
   @override
   Future<void> updateCoinPrice(CoinPrice coinPrice) async {
     try {
-      await _supabase
-          .from('coin_prices')
-          .update(coinPrice.toMap())
-          .eq('id', coinPrice.id);
+      await _supabase.rpc('admin_update_coin_price_secure', params: {
+        'p_price_id': coinPrice.id,
+        'p_proposal_cost': coinPrice.proposalCost,
+      });
     } catch (e) {
       print('❌ updateCoinPrice error: $e');
       rethrow;
@@ -383,7 +371,11 @@ class SupabaseCoinService implements ICoinService {
   @override
   Future<void> createCoinPrice(CoinPrice coinPrice) async {
     try {
-      await _supabase.from('coin_prices').insert(coinPrice.toMap());
+      await _supabase.rpc('admin_create_coin_price_secure', params: {
+        'p_category_id': coinPrice.categoryId,
+        'p_category_name': coinPrice.categoryName,
+        'p_proposal_cost': coinPrice.proposalCost,
+      });
     } catch (e) {
       print('❌ createCoinPrice error: $e');
       rethrow;
@@ -410,28 +402,16 @@ class SupabaseCoinService implements ICoinService {
 
   @override
   Future<void> setMessageCoinCost(int cost) async {
-    try {
-      final existing = await _supabase
-          .from('settings')
-          .select()
-          .eq('key', 'message_coin_cost')
-          .maybeSingle();
-
-      if (existing != null) {
-        await _supabase
-            .from('settings')
-            .update({'value': cost.toString()})
-            .eq('key', 'message_coin_cost');
-      } else {
-        await _supabase.from('settings').insert({
-          'key': 'message_coin_cost',
-          'value': cost.toString(),
-        });
-      }
-    } catch (e) {
-      print('❌ setMessageCoinCost error: $e');
-      rethrow;
+    if (cost <= 0) {
+      throw AppException(
+        message: 'Mesaj coin maliyeti 0 dan büyük olmalıdır.',
+        type: AppExceptionType.validation,
+      );
     }
+
+    await _supabase.rpc('admin_set_message_coin_cost_secure', params: {
+      'p_cost': cost,
+    });
   }
 
   /// 12. Refund Geçmişi Metodları
@@ -455,21 +435,33 @@ class SupabaseCoinService implements ICoinService {
 
   @override
   Future<void> processCoinRefund(CoinRefund refund) async {
-    try {
-      await refundCoin(
-        refund.freelancerId,
-        refund.refundAmount,
-        refund.reason,
-        relatedId: refund.proposalId,
-      );
+    await _supabase.rpc('process_coin_refund_atomic', params: {
+      'p_refund_id': refund.id,
+    });
+  }
 
-      await _supabase
-          .from('coin_refunds')
-          .update({'is_processed': true})
-          .eq('id', refund.id);
-    } catch (e) {
-      print('❌ processCoinRefund error: $e');
-      rethrow;
+  String _mapCoinError(String message) {
+    switch (message) {
+      case 'not_authenticated':
+        return 'Oturum bulunamadı.';
+      case 'coin_package_not_found':
+        return 'Coin paketi artık satışta değil.';
+      case 'wallet_not_found':
+        return 'Cüzdan bulunamadı.';
+      case 'insufficient_wallet_balance':
+        return 'Yetersiz cüzdan bakiyesi.';
+      case 'insufficient_coin_balance':
+        return 'Yetersiz coin bakiyesi.';
+      case 'profile_not_found':
+        return 'Kullanıcı profili bulunamadı.';
+      case 'invalid_amount':
+        return 'Geçersiz coin paketi tutarı.';
+      case 'idempotency_key_reused_with_different_package':
+        return 'Bu satın alma anahtarı başka bir paket için kullanılmış.';
+      case 'not_authorized':
+        return 'Bu işlem için yetkiniz yok.';
+      default:
+        return message;
     }
   }
 }

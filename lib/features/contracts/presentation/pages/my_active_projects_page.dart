@@ -109,7 +109,7 @@ class MyActiveProjectsPage extends ConsumerWidget {
                           ),
                           const SizedBox(width: 12),
                           const Text(
-                            'Kilitli Escrow Bakiyesi',
+                            'Proje Bütçesi',
                             style: TextStyle(
                               color: AppColors.grey,
                               fontSize: 13,
@@ -130,7 +130,7 @@ class MyActiveProjectsPage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 6),
                       const Text(
-                        'Ödemeler iş onayınızın ardından freelancer hesaplarına aktarılır.',
+                        'Ödeme adımı pasiftir. Proje yönetimi bu panel üzerinden devam eder.',
                         style: TextStyle(
                           color: AppColors.grey,
                           fontSize: 11,
@@ -295,21 +295,46 @@ class MyActiveProjectsPage extends ConsumerWidget {
   String _getContractStatusText(ContractStatus status) {
     switch (status) {
       case ContractStatus.waitingPayment:
-        return 'Ödeme Bekleniyor';
+        return 'Ödeme (Pasif)';
+
       case ContractStatus.funded:
-        return 'Ödeme Havuzda';
+        return 'Ödeme (Pasif)';
+
       case ContractStatus.active:
         return 'Devam Ediyor';
-      case ContractStatus.submitted:
+
+      case ContractStatus.deliverySubmitted:
         return 'Teslim Edildi';
+
+      case ContractStatus.underReview:
+        return 'İnceleniyor';
+
       case ContractStatus.revisionRequested:
         return 'Revizyon İstendi';
+
+      case ContractStatus.revisionInProgress:
+        return 'Revizyon Yapılıyor';
+
+      case ContractStatus.approved:
+        return 'Onaylandı';
+
+      case ContractStatus.paymentProcessing:
+        return 'Ödeme (Pasif)';
+
       case ContractStatus.completed:
         return 'Tamamlandı';
-      case ContractStatus.disputed:
-        return 'Uyuşmazlık Açıldı';
+
+      case ContractStatus.cancelRequested:
+        return 'İptal Talebi';
+
       case ContractStatus.cancelled:
         return 'İptal Edildi';
+
+      case ContractStatus.disputed:
+        return 'Uyuşmazlık Açıldı';
+
+      case ContractStatus.resolved:
+        return 'Çözüldü';
     }
   }
 }

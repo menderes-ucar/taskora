@@ -4,6 +4,7 @@ class RouteNames {
   static const String roleSelection = '/role-selection';
   static const String freelancerShell = '/freelancer-shell';
   static const String employerShell = '/employer-shell';
+  static const String organization = '/organization';
 
   // route_names.dart içinde:
   static const String adminDashboard = '/admin';

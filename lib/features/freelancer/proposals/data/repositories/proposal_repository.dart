@@ -18,4 +18,10 @@ abstract class ProposalRepository {
   Future<void> addProposal(ProposalModel proposal);
 
   Future<void> updateProposalStatus(String proposalId, ProposalStatus status);
+
+  /// Atomically selects one proposal for a job, moves the job to in-progress,
+  /// and refunds 50% of the coin cost to every other eligible proposal.
+  Future<void> selectProposalForJob({
+    required String proposalId,
+  });
 }

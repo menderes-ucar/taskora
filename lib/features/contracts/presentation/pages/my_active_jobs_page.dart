@@ -256,21 +256,46 @@ class MyActiveJobsPage extends ConsumerWidget {
   String _getContractStatusText(ContractStatus status) {
     switch (status) {
       case ContractStatus.waitingPayment:
-        return 'Ödeme Bekleniyor';
+        return 'Ödeme (Pasif)';
+
       case ContractStatus.funded:
-        return 'Ödeme Havuzda';
+        return 'Ödeme (Pasif)';
+
       case ContractStatus.active:
         return 'Devam Ediyor';
-      case ContractStatus.submitted:
+
+      case ContractStatus.deliverySubmitted:
         return 'Teslim Edildi';
+
+      case ContractStatus.underReview:
+        return 'İnceleniyor';
+
       case ContractStatus.revisionRequested:
         return 'Revizyon İstendi';
+
+      case ContractStatus.revisionInProgress:
+        return 'Revizyon Yapılıyor';
+
+      case ContractStatus.approved:
+        return 'Onaylandı';
+
+      case ContractStatus.paymentProcessing:
+        return 'Ödeme (Pasif)';
+
       case ContractStatus.completed:
         return 'Tamamlandı';
-      case ContractStatus.disputed:
-        return 'Uyuşmazlık Açıldı';
+
+      case ContractStatus.cancelRequested:
+        return 'İptal Talebi';
+
       case ContractStatus.cancelled:
         return 'İptal Edildi';
+
+      case ContractStatus.disputed:
+        return 'Uyuşmazlık Açıldı';
+
+      case ContractStatus.resolved:
+        return 'Çözüldü';
     }
   }
 
@@ -278,13 +303,16 @@ class MyActiveJobsPage extends ConsumerWidget {
     switch (status) {
       case ContractStatus.active:
       case ContractStatus.funded:
-        return _BadgeConfig(const Color(0xFFEFF6FF), const Color(0xFF2563EB));
-      case ContractStatus.submitted:
-        return _BadgeConfig(const Color(0xFFFEF3C7), const Color(0xFFD97706));
+        return _BadgeConfig(const Color(0xFFEFF6FF), const Color(0xFF2563EB)); // Mavi
+
+      case ContractStatus.deliverySubmitted: // 'submitted' yerine 'deliverySubmitted' yapıldı
+        return _BadgeConfig(const Color(0xFFFEF3C7), const Color(0xFFD97706)); // Sarı / Turuncu
+
       case ContractStatus.revisionRequested:
-        return _BadgeConfig(const Color(0xFFFEE2E2), const Color(0xDC2626));
+        return _BadgeConfig(const Color(0xFFFEE2E2), const Color(0xFFDC2626)); // Kırmızı (HEX Düzeltildi)
+
       default:
-        return _BadgeConfig(const Color(0xFFF1F5F9), const Color(0xFF475569));
+        return _BadgeConfig(const Color(0xFFF1F5F9), const Color(0xFF475569)); // Gri
     }
   }
 }

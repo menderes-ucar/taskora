@@ -14,6 +14,7 @@ class _AdminPayoutsPageState extends State<AdminPayoutsPage> {
   final _payoutService = AdminPayoutService();
   List<Map<String, dynamic>> _requests = [];
   bool _isLoading = true;
+  String? _processingRequestId;
 
   @override
   void initState() {
@@ -22,25 +23,47 @@ class _AdminPayoutsPageState extends State<AdminPayoutsPage> {
   }
 
   Future<void> _fetchRequests() async {
-    setState(() => _isLoading = true);
+    if (mounted) {
+      setState(() => _isLoading = true);
+    }
+
     try {
       final res = await _payoutService.getPayoutRequests();
+
+      if (!mounted) return;
+
       setState(() {
         _requests = res;
         _isLoading = false;
       });
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: AppColors.danger, content: Text('Hata: $e')),
-        );
-      }
+      if (!mounted) return;
+
       setState(() => _isLoading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.danger,
+          content: Text('Hata: $e'),
+        ),
+      );
     }
   }
 
-  Future<void> _handleAction(Map<String, dynamic> req, String status) async {
+  Future<void> _handleAction(
+      Map<String, dynamic> request,
+      String status,
+      ) async {
+    final requestId = request['id']?.toString();
+    if (requestId == null || requestId.isEmpty) return;
+
+    if (_processingRequestId != null) return;
+
     final isApprove = status == 'approved';
+    final amount = _parseAmount(request['amount']);
+    final profile = _profileFromRequest(request);
+    final displayName = _displayName(profile);
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -51,8 +74,10 @@ class _AdminPayoutsPageState extends State<AdminPayoutsPage> {
         ),
         content: Text(
           isApprove
-              ? '${req['account_holder']} hesabına ₺${req['amount']} ödemeyi yaptıysanız onaylayın.'
-              : 'Talebi reddederseniz tutar kullanıcının bakiyesine iade edilecektir.',
+              ? '$displayName hesabına ₺${amount.toStringAsFixed(2)} '
+              'ödemeyi gerçekten yaptıysanız onaylayın.'
+              : 'Talebi reddederseniz ₺${amount.toStringAsFixed(2)} '
+              'tutar kullanıcının bakiyesine iade edilecektir.',
           style: const TextStyle(color: Colors.white70),
         ),
         actions: [
@@ -62,32 +87,83 @@ class _AdminPayoutsPageState extends State<AdminPayoutsPage> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: isApprove ? AppColors.success : AppColors.danger,
+              backgroundColor:
+              isApprove ? AppColors.success : AppColors.danger,
             ),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(isApprove ? 'Onayla (Ödendi)' : 'Reddet (İade Et)'),
+            child: Text(
+              isApprove ? 'Onayla (Ödendi)' : 'Reddet (İade Et)',
+            ),
           ),
         ],
       ),
     );
 
-    if (confirm != true) return;
+    if (confirm != true || !mounted) return;
+
+    setState(() => _processingRequestId = requestId);
 
     try {
       await _payoutService.updatePayoutStatus(
-        requestId: req['id'],
-        userId: req['user_id'],
-        amount: (req['amount'] as num).toDouble(),
+        requestId: requestId,
         newStatus: status,
       );
-      _fetchRequests();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.success,
+          content: Text(
+            isApprove
+                ? 'Ödeme başarıyla onaylandı.'
+                : 'Talep reddedildi ve tutar iade edildi.',
+          ),
+        ),
+      );
+
+      await _fetchRequests();
     } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.danger,
+          content: Text('Hata: $e'),
+        ),
+      );
+    } finally {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: AppColors.danger, content: Text('Hata: $e')),
-        );
+        setState(() => _processingRequestId = null);
       }
     }
+  }
+
+  Map<String, dynamic> _profileFromRequest(
+      Map<String, dynamic> request,
+      ) {
+    final rawProfile = request['profiles'];
+
+    if (rawProfile is Map) {
+      return Map<String, dynamic>.from(rawProfile);
+    }
+
+    return const <String, dynamic>{};
+  }
+
+  String _displayName(Map<String, dynamic> profile) {
+    final name = profile['name']?.toString().trim();
+    if (name != null && name.isNotEmpty) return name;
+
+    final email = profile['email']?.toString().trim();
+    if (email != null && email.isNotEmpty) return email;
+
+    return 'Kullanıcı';
+  }
+
+  double _parseAmount(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   @override
@@ -104,68 +180,145 @@ class _AdminPayoutsPageState extends State<AdminPayoutsPage> {
             ? const Center(child: CircularProgressIndicator())
             : _requests.isEmpty
             ? const Center(
-          child: Text('Henüz para çekme talebi yok.', style: TextStyle(color: Colors.white70)),
+          child: Text(
+            'Henüz para çekme talebi yok.',
+            style: TextStyle(color: Colors.white70),
+          ),
         )
-            : ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: _requests.length,
-          itemBuilder: (context, i) {
-            final req = _requests[i];
-            final profile = req['profiles'] ?? {};
-            final status = req['status'] ?? 'pending';
+            : RefreshIndicator(
+          onRefresh: _fetchRequests,
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: _requests.length,
+            itemBuilder: (context, index) {
+              final request = _requests[index];
+              final profile = _profileFromRequest(request);
+              final displayName = _displayName(profile);
+              final status =
+                  request['status']?.toString() ?? 'pending';
+              final amount = _parseAmount(request['amount']);
+              final bankName =
+                  request['bank_name']?.toString() ?? '-';
+              final bankAccount =
+                  request['bank_account']?.toString() ?? '-';
+              final requestId = request['id']?.toString();
+              final isProcessing =
+                  requestId != null &&
+                      requestId == _processingRequestId;
 
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceCard,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        profile['name'] ?? profile['email'] ?? 'Kullanıcı',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                      Text(
-                        '₺${req['amount']}',
-                        style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.w900, fontSize: 18),
-                      ),
-                    ],
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceCard,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.08),
                   ),
-                  const SizedBox(height: 8),
-                  Text('Hesap Sahibi: ${req['account_holder']}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                  Text('Banka: ${req['bank_name']}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                  SelectableText('IBAN: ${req['iban']}', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 13)),
-                  const Divider(color: Colors.white10, height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _StatusBadge(status: status),
-                      if (status == 'pending')
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.cancel, color: AppColors.danger),
-                              onPressed: () => _handleAction(req, 'rejected'),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            displayName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.check_circle, color: AppColors.success),
-                              onPressed: () => _handleAction(req, 'approved'),
-                            ),
-                          ],
+                          ),
                         ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
+                        const SizedBox(width: 12),
+                        Text(
+                          '₺${amount.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            color: AppColors.success,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Hesap Sahibi: $displayName',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                      ),
+                    ),
+                    Text(
+                      'Banka: $bankName',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                      ),
+                    ),
+                    SelectableText(
+                      'IBAN / Hesap: $bankAccount',
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const Divider(
+                      color: Colors.white10,
+                      height: 24,
+                    ),
+                    Row(
+                      mainAxisAlignment:
+                      MainAxisAlignment.spaceBetween,
+                      children: [
+                        _StatusBadge(status: status),
+                        if (status == 'pending')
+                          isProcessing
+                              ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                              : Row(
+                            children: [
+                              IconButton(
+                                tooltip: 'Reddet ve iade et',
+                                icon: const Icon(
+                                  Icons.cancel,
+                                  color: AppColors.danger,
+                                ),
+                                onPressed: () =>
+                                    _handleAction(
+                                      request,
+                                      'rejected',
+                                    ),
+                              ),
+                              IconButton(
+                                tooltip: 'Ödendi olarak onayla',
+                                icon: const Icon(
+                                  Icons.check_circle,
+                                  color: AppColors.success,
+                                ),
+                                onPressed: () =>
+                                    _handleAction(
+                                      request,
+                                      'approved',
+                                    ),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ),
       ),
     );
@@ -174,31 +327,32 @@ class _AdminPayoutsPageState extends State<AdminPayoutsPage> {
 
 class _StatusBadge extends StatelessWidget {
   final String status;
+
   const _StatusBadge({required this.status});
 
   @override
   Widget build(BuildContext context) {
-    Color bg;
-    String text;
-
-    switch (status) {
-      case 'approved':
-        bg = AppColors.success;
-        text = 'ÖDENDİ';
-        break;
-      case 'rejected':
-        bg = AppColors.danger;
-        text = 'REDDEDİLDİ';
-        break;
-      default:
-        bg = Colors.orange;
-        text = 'ONAY BEKLİYOR';
-    }
+    final (Color background, String text) = switch (status) {
+      'approved' => (AppColors.success, 'ÖDENDİ'),
+      'rejected' => (AppColors.danger, 'REDDEDİLDİ'),
+      'cancelled' => (Colors.grey, 'İPTAL EDİLDİ'),
+      _ => (Colors.orange, 'ONAY BEKLİYOR'),
+    };
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: bg.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
-      child: Text(text, style: TextStyle(color: bg, fontWeight: FontWeight.bold, fontSize: 11)),
+      decoration: BoxDecoration(
+        color: background.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: background,
+          fontWeight: FontWeight.bold,
+          fontSize: 11,
+        ),
+      ),
     );
   }
 }

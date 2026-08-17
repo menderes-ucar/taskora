@@ -6,6 +6,7 @@ import '../../../../app/theme/app_colors.dart';
 import '../../../../core/widgets/primary_button.dart';
 import '../../../../shared/enums/job_status.dart';
 import '../../../../shared/models/job_model.dart';
+import '../../../../shared/constants/job_categories.dart';
 import '../../../auth/presentation/providers/auth_state.dart';
 import '../../domain/providers/job_provider.dart';
 
@@ -27,13 +28,9 @@ class _CreateJobPageState extends ConsumerState<CreateJobPage> {
   String? selectedCategory;
   bool _isSubmitting = false;
 
-  final List<_JobCategoryItem> categories = const [
-    _JobCategoryItem(label: 'Grafik Tasarım', icon: Icons.brush_rounded),
-    _JobCategoryItem(label: 'Yazılım', icon: Icons.code_rounded),
-    _JobCategoryItem(label: 'Mobil', icon: Icons.phone_iphone_rounded),
-    _JobCategoryItem(label: 'UI/UX', icon: Icons.design_services_rounded),
-    _JobCategoryItem(label: 'Video', icon: Icons.videocam_rounded),
-    _JobCategoryItem(label: 'Sosyal Medya', icon: Icons.campaign_rounded),
+  final List<_JobCategoryItem> categories = [
+    for (final category in TaskoraJobCategories.all)
+      _JobCategoryItem(label: category.label, icon: category.icon),
   ];
 
   @override

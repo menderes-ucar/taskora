@@ -4,6 +4,7 @@ import '../../../../app/theme/app_colors.dart';
 import '../../../../shared/enums/contract_status.dart';
 import '../../../../shared/models/contract_model.dart';
 import '../../logic/contracts_provider.dart';
+import '../pages/delivery_submission_page.dart';
 
 class ContractActionBar extends ConsumerWidget {
   final ContractModel contract;
@@ -19,7 +20,7 @@ class ContractActionBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Tamamlanmış veya İptal Edilmiş işlerde aksiyon barı gizle
+    // Hide action bar for completed or cancelled contracts
     if (contract.status == ContractStatus.completed ||
         contract.status == ContractStatus.cancelled) {
       return const SizedBox.shrink();
@@ -40,12 +41,15 @@ class ContractActionBar extends ConsumerWidget {
       ),
       child: SafeArea(
         top: false,
-        child: isFreelancer ? _buildFreelancerActions(context, ref) : _buildEmployerActions(context, ref),
+        child: isFreelancer
+            ? _buildFreelancerActions(context, ref)
+            : _buildEmployerActions(context, ref),
       ),
     );
   }
 
   Widget _buildFreelancerActions(BuildContext context, WidgetRef ref) {
+    // Freelancer can submit delivery in these states
     if (contract.status == ContractStatus.active ||
         contract.status == ContractStatus.revisionRequested ||
         contract.status == ContractStatus.funded) {
@@ -66,12 +70,13 @@ class ContractActionBar extends ConsumerWidget {
                 : 'Proje Teslimatı Yap (Yeni Versiyon)',
             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
           ),
-          onPressed: () => _showSubmitDeliveryModal(context, ref),
+          onPressed: () => _openDeliveryPage(context),
         ),
       );
     }
 
-    if (contract.status == ContractStatus.submitted) {
+    // Correct enum: deliverySubmitted (not submitted)
+    if (contract.status == ContractStatus.deliverySubmitted) {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
@@ -85,12 +90,19 @@ class ContractActionBar extends ConsumerWidget {
             SizedBox(
               width: 16,
               height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.amber),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.amber,
+              ),
             ),
             SizedBox(width: 10),
             Text(
               'Teslimat İncelemede. İşveren Onayı Bekleniyor...',
-              style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13),
+              style: TextStyle(
+                color: Colors.amber,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
             ),
           ],
         ),
@@ -101,7 +113,8 @@ class ContractActionBar extends ConsumerWidget {
   }
 
   Widget _buildEmployerActions(BuildContext context, WidgetRef ref) {
-    if (contract.status == ContractStatus.submitted) {
+    // Employer can approve/reject in deliverySubmitted state
+    if (contract.status == ContractStatus.deliverySubmitted) {
       return Row(
         children: [
           Expanded(
@@ -114,7 +127,10 @@ class ContractActionBar extends ConsumerWidget {
               onPressed: () => _showRevisionModal(context, ref),
               child: Text(
                 'Revizyon İste',
-                style: TextStyle(color: Colors.amber.shade800, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: Colors.amber.shade800,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
@@ -128,19 +144,11 @@ class ContractActionBar extends ConsumerWidget {
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
-              onPressed: () async {
-                await ref.read(contractsProvider.notifier).approveAndReleasePayment(contract.id);
-                onRefresh();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      backgroundColor: AppColors.success,
-                      content: Text('Proje onaylandı & Escrow ödemesi serbest bırakıldı! 🎉'),
-                    ),
-                  );
-                }
-              },
-              child: const Text('Onayla & Öde', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () => _approveDelivery(context, ref),
+              child: const Text(
+                'Onayla (Ödeme Pasif)',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
           ),
         ],
@@ -150,96 +158,16 @@ class ContractActionBar extends ConsumerWidget {
     return const SizedBox.shrink();
   }
 
-  void _showSubmitDeliveryModal(BuildContext context, WidgetRef ref) {
-    final messageController = TextEditingController();
-    final linkController = TextEditingController();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 24, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Yeni Versiyon Teslim Et',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.black),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Dosyalarınızı Google Drive, Figma, GitHub veya Wetransfer linki olarak ekleyebilirsiniz.',
-              style: TextStyle(color: AppColors.grey, fontSize: 12),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: messageController,
-              maxLines: 3,
-              decoration: InputDecoration(
-                hintText: 'Teslimat notu / Yapılan çalışmalar...',
-                filled: true,
-                fillColor: Colors.grey.shade50,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: linkController,
-              decoration: InputDecoration(
-                hintText: 'Proje Linki / GitHub / Drive (Opsiyonel)',
-                prefixIcon: const Icon(Icons.link_rounded, color: AppColors.primaryDark),
-                filled: true,
-                fillColor: Colors.grey.shade50,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryDark,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: () async {
-                  if (messageController.text.trim().isEmpty) return;
-
-                  await ref.read(contractsProvider.notifier).submitDelivery(
-                    contractId: contract.id,
-                    message: messageController.text.trim(),
-                    fileUrl: linkController.text.trim(),
-                  );
-
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    onRefresh();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        backgroundColor: AppColors.success,
-                        content: Text('Teslimat başarıyla yapıldı!'),
-                      ),
-                    );
-                  }
-                },
-                child: const Text('Teslimatı Gönder', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              ),
-            ),
-          ],
-        ),
+  Future<void> _openDeliveryPage(BuildContext context) async {
+    final submitted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => DeliverySubmissionPage(contract: contract),
       ),
     );
+
+    if (submitted == true && context.mounted) {
+      onRefresh();
+    }
   }
 
   void _showRevisionModal(BuildContext context, WidgetRef ref) {
@@ -253,14 +181,23 @@ class ContractActionBar extends ConsumerWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 24, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          24,
+          20,
+          MediaQuery.of(ctx).viewInsets.bottom + 24,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
               'Revizyon Talebi',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.black),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.black,
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -283,33 +220,145 @@ class ContractActionBar extends ConsumerWidget {
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.amber.shade700,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-                onPressed: () async {
-                  if (reasonController.text.trim().isEmpty) return;
-
-                  await ref.read(contractsProvider.notifier).requestRevision(
-                    contractId: contract.id,
-                    reason: reasonController.text.trim(),
-                  );
-
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    onRefresh();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        backgroundColor: AppColors.warning,
-                        content: Text('Revizyon talebi iletildi.'),
-                      ),
-                    );
-                  }
-                },
-                child: const Text('Revizyonu İlet', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                onPressed: () => _requestRevision(
+                  context,
+                  ref,
+                  reasonController.text.trim(),
+                ),
+                child: const Text(
+                  'Revizyonu İlet',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _submitDelivery(
+      BuildContext context,
+      WidgetRef ref,
+      String message,
+      String fileUrl,
+      ) async {
+    if (message.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Lütfen teslimat notunu yazınız'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await ref.read(contractsProvider.notifier).submitDelivery(
+        contractId: contract.id,
+        message: message,
+        fileUrl: fileUrl.isEmpty ? null : fileUrl,
+      );
+
+      if (context.mounted) {
+        Navigator.pop(context);
+        onRefresh();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: AppColors.success,
+            content: Text('Teslimat başarıyla yapıldı!'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('Hata: $e'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _requestRevision(
+      BuildContext context,
+      WidgetRef ref,
+      String reason,
+      ) async {
+    if (reason.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.red,
+          content: Text('Lütfen revizyon nedenini yazınız'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await ref.read(contractsProvider.notifier).requestRevision(
+        contractId: contract.id,
+        reason: reason,
+      );
+
+      if (context.mounted) {
+        Navigator.pop(context);
+        onRefresh();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: AppColors.warning,
+            content: Text('Revizyon talebi iletildi.'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('Hata: $e'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _approveDelivery(
+      BuildContext context,
+      WidgetRef ref,
+      ) async {
+    try {
+      await ref.read(contractsProvider.notifier).approveDelivery(
+        contract.id,
+      );
+
+      onRefresh();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: AppColors.success,
+            content: Text('Proje onaylandı. Ödeme adımı pasif.'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('Hata: $e'),
+          ),
+        );
+      }
+    }
   }
 }
