@@ -1,4 +1,4 @@
-import 'package:supabase_flutter/supabase_flutter.dart' hide Provider;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../error/app_exception.dart';
 import '../../shared/models/job_model.dart';
 import '../../shared/models/user_model.dart';

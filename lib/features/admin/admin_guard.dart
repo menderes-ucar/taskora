@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import '../../app/theme/app_colors.dart';
 import '../../shared/enums/user_role.dart';
-import '../auth/presentation/providers/auth_state.dart';
+import '../auth/presentation/providers/auth_provider.dart';
 
 class AdminGuard extends ConsumerWidget {
   final Widget child;
@@ -11,9 +10,9 @@ class AdminGuard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(authProvider).user;
+    final auth = ref.watch(authProvider);
 
-    if (user != null && (user.role == UserRole.admin || user.role.name == 'admin')) {
+    if (auth.isLoggedIn && auth.user?.role.isAdminRole == true) {
       return child;
     }
 
@@ -34,11 +33,7 @@ class AdminGuard extends ConsumerWidget {
               SizedBox(height: 16),
               Text(
                 'Yetkisiz Erişim!',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.black,
-                ),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.black),
               ),
               SizedBox(height: 8),
               Text(

@@ -30,7 +30,7 @@ class SupabaseRatingService implements IRatingService {
           .maybeSingle();
 
       if (response == null) return null;
-      return RatingModel.fromMap(response as Map<String, dynamic>);
+      return RatingModel.fromMap(response);
     } catch (e) {
       print('❌ getRatingByContractId error: $e');
       return null;
@@ -146,7 +146,7 @@ class SupabaseRatingService implements IRatingService {
       if ((response as List).isEmpty) return 0.0;
 
       final ratings = response
-          .map((json) => RatingModel.fromMap(json as Map<String, dynamic>))
+          .map((json) => RatingModel.fromMap(json))
           .toList();
 
       final sum = ratings.fold<double>(0, (acc, r) => acc + r.rating);

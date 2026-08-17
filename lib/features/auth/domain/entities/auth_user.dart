@@ -43,6 +43,8 @@ class AuthUser {
 
   String get fullName => '$firstName $lastName'.trim();
   String get name => fullName; // Geriye dönük uyumluluk için
+  bool get isAdmin => role.isAdminRole;
+  bool get isSuperAdmin => role == UserRole.superAdmin;
 
   factory AuthUser.fromMap(Map<String, dynamic> map, {bool emailVerified = false}) {
     final rawName = (map['name'] ?? '').toString().trim();

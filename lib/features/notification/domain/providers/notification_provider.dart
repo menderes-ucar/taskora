@@ -42,6 +42,24 @@ class NotificationActionNotifier {
           .eq('user_id', userId);
     } catch (_) {}
   }
+
+  Future<void> delete(String notificationId) async {
+    try {
+      await _supabase
+          .from('notifications')
+          .delete()
+          .eq('id', notificationId);
+    } catch (_) {}
+  }
+
+  Future<void> deleteAll(String userId) async {
+    try {
+      await _supabase
+          .from('notifications')
+          .delete()
+          .eq('user_id', userId);
+    } catch (_) {}
+  }
 }
 
 final notificationActionProvider = Provider<NotificationActionNotifier>((ref) {

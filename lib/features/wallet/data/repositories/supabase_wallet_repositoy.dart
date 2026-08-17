@@ -8,50 +8,29 @@ class SupabaseWalletRepository implements WalletRepository {
 
   @override
   Future<WalletModel> getWallet(String userId) async {
-    try {
-      final response = await _client
-          .from(_table)
-          .select()
-          .eq('user_id', userId)
-          .maybeSingle();
+    final response = await _client
+        .from(_table)
+        .select()
+        .eq('user_id', userId)
+        .maybeSingle();
 
-      if (response == null) {
-        // 🚀 'created_at' kaldırıldı, varsayılan tablo yapısıyla ekleniyor
-        final newWalletMap = {
-          'user_id': userId,
-          'balance': 0.0,
-        };
-
-        await _client.from(_table).insert(newWalletMap);
-        return WalletModel(userId: userId, balance: 0.0);
-      }
-
-      return WalletModel(
-        userId: response['user_id'] as String,
-        balance: (response['balance'] as num).toDouble(),
-      );
-    } catch (e) {
-      return WalletModel(userId: userId, balance: 0.0);
+    if (response == null) {
+      throw StateError('Kullanıcı cüzdanı bulunamadı.');
     }
+
+    return WalletModel(
+      userId: response['user_id'] as String,
+      balance: (response['balance'] as num).toDouble(),
+    );
   }
 
   @override
   Future<void> deposit(String userId, double amount) async {
-    if (amount <= 0) return;
-
-    await _client.rpc('increment_wallet_balance', params: {
-      'p_user_id': userId,
-      'p_amount': amount,
-    });
+    throw StateError('Cüzdan bakiyesi doğrudan değiştirilemez.');
   }
 
   @override
   Future<void> withdraw(String userId, double amount) async {
-    if (amount <= 0) return;
-
-    await _client.rpc('decrement_wallet_balance', params: {
-      'p_user_id': userId,
-      'p_amount': amount,
-    });
+    throw StateError('Para çekme payout request üzerinden yapılmalıdır.');
   }
 }

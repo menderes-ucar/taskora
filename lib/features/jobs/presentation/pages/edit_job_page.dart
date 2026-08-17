@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/widgets/primary_button.dart';
 import '../../../../shared/models/job_model.dart';
+import '../../../../shared/constants/job_categories.dart';
 import '../../domain/providers/job_provider.dart';
 
 class EditJobPage extends ConsumerStatefulWidget {
@@ -25,13 +26,9 @@ class _EditJobPageState extends ConsumerState<EditJobPage> {
 
   String? selectedCategory;
 
-  final List<_JobCategoryItem> categories = const [
-    _JobCategoryItem(label: 'Grafik Tasarım', icon: Icons.brush_rounded),
-    _JobCategoryItem(label: 'Yazılım', icon: Icons.code_rounded),
-    _JobCategoryItem(label: 'Mobil', icon: Icons.phone_iphone_rounded),
-    _JobCategoryItem(label: 'UI/UX', icon: Icons.design_services_rounded),
-    _JobCategoryItem(label: 'Video', icon: Icons.videocam_rounded),
-    _JobCategoryItem(label: 'Sosyal Medya', icon: Icons.campaign_rounded),
+  final List<_JobCategoryItem> categories = [
+    for (final category in TaskoraJobCategories.all)
+      _JobCategoryItem(label: category.label, icon: category.icon),
   ];
 
   @override

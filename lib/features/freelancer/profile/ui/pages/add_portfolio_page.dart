@@ -384,10 +384,3 @@ class _AddPortfolioPageState extends ConsumerState<AddPortfolioPage> {
     );
   }
 }
-
-class _SectionTitle extends StatelessWidget {
-  final String text;
-  const _SectionTitle(this.text);
-  @override
-  Widget build(BuildContext context) => const SizedBox.shrink();
-}

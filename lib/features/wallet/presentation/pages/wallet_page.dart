@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../app/theme/app_colors.dart';
-import '../../../../shared/enums/transaction_type.dart';
 import '../../../../shared/models/transaction_model.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../coin/presentation/pages/coin_store_page.dart';
@@ -34,38 +32,23 @@ class _WalletPageState extends ConsumerState<WalletPage> {
   }
 
   Future<void> _quickDeposit(double amount) async {
-    try {
-      await ref.read(walletProvider.notifier).deposit(amount);
-      await ref.read(transactionsProvider.notifier).addTransaction(
-        amount: amount,
-        type: TransactionType.deposit,
-        title: 'Bakiye Yüklendi',
-        description: 'Hızlı bakiye yükleme yapıldı.',
-        isIncome: true,
-      );
+    final authUser = ref.read(authProvider).user;
+    if (authUser == null || !mounted) return;
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppColors.success,
-            content: Text('₺${amount.toStringAsFixed(0)} bakiye eklendi'),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: AppColors.danger, content: Text('Hata: $e')),
-        );
-      }
-    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddFundsPage(userId: authUser.id, initialAmount: amount),
+      ),
+    );
+
+    await _refreshAll();
   }
 
   @override
   Widget build(BuildContext context) {
     final authUser = ref.watch(authProvider).user;
-    final supabaseUser = Supabase.instance.client.auth.currentUser;
-    final currentUserId = authUser?.id ?? supabaseUser?.id;
+    final currentUserId = authUser?.id;
 
     if (currentUserId == null) {
       return const Scaffold(

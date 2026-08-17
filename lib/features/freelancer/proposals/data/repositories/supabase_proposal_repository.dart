@@ -23,20 +23,6 @@ class SupabaseProposalRepository implements ProposalRepository {
         .toList();
   }
 
-  @override
-  Future<bool> hasUserApplied({
-    required String jobId,
-    required String freelancerId,
-  }) async {
-    final response = await _supabase
-        .from(_table)
-        .select('id')
-        .eq('job_id', jobId)
-        .eq('freelancer_id', freelancerId)
-        .maybeSingle();
-
-    return response != null;
-  }
 
   @override
   Future<List<ProposalModel>> getByFreelancer(String freelancerId) async {
@@ -91,7 +77,40 @@ class SupabaseProposalRepository implements ProposalRepository {
 
   @override
   Future<void> addProposal(ProposalModel proposal) async {
-    await _supabase.from(_table).insert(proposal.toInsertMap());
+    final response = await _supabase.rpc(
+      'submit_proposal_safely',
+      params: {
+        'p_job_id': proposal.jobId,
+        'p_freelancer_id': proposal.freelancerId,
+        'p_freelancer_name': proposal.freelancerName,
+        'p_amount': proposal.amount,
+        'p_delivery_days': proposal.deliveryDays,
+        'p_cover_letter': proposal.coverLetter,
+        'p_coin_cost': proposal.coinCost,
+      },
+    );
+
+    if (response == null) {
+      throw Exception('Teklif oluşturulamadı.');
+    }
+  }
+
+  @override
+  Future<void> selectProposalForJob({
+    required String proposalId,
+  }) async {
+    try {
+      await _supabase.rpc(
+        'select_freelancer_for_job_atomic',
+        params: {
+          'p_proposal_id': proposalId,
+        },
+      );
+    } on PostgrestException catch (e) {
+      throw Exception(e.message);
+    } catch (e) {
+      throw Exception('Freelancer seçilemedi. Lütfen tekrar deneyin.');
+    }
   }
 
   @override
@@ -99,8 +118,25 @@ class SupabaseProposalRepository implements ProposalRepository {
       String proposalId,
       ProposalStatus status,
       ) async {
-    await _supabase.from(_table).update({
-      'status': status.name,
-    }).eq('id', proposalId);
+    if (status == ProposalStatus.withdrawn) {
+      await _supabase.rpc(
+        'withdraw_proposal_secure',
+        params: {'p_proposal_id': proposalId},
+      );
+      return;
+    }
+
+    if (status != ProposalStatus.accepted &&
+        status != ProposalStatus.rejected) {
+      throw ArgumentError('Desteklenmeyen proposal status: ${status.name}');
+    }
+
+    await _supabase.rpc(
+      'change_proposal_status_rpc',
+      params: {
+        'p_proposal_id': proposalId,
+        'p_status': status.name,
+      },
+    );
   }
 }

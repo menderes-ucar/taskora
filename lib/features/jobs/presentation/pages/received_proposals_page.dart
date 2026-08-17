@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' hide Provider;
-
 import '../../../../../app/theme/app_colors.dart';
 import '../../../../../core/widgets/primary_button.dart';
 import '../../../../../shared/enums/proposal_status.dart';
 import '../../../../../shared/models/job_model.dart';
 import '../../../../../shared/models/proposal_model.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
-import '../../../contracts/logic/contracts_provider.dart';
 import '../../../employer/freelancers/ui/pages/freelancer_detail_page.dart';
 import '../../../freelancer/proposals/providers/proposals_provider.dart';
 import '../../domain/providers/job_provider.dart';
@@ -119,10 +117,15 @@ class _ReceivedProposalCard extends ConsumerWidget {
     switch (proposal.status) {
       case ProposalStatus.pending:
         return AppColors.warning;
+
       case ProposalStatus.accepted:
         return AppColors.success;
+
       case ProposalStatus.rejected:
-        return AppColors.error;
+        return AppColors.danger;
+
+      case ProposalStatus.withdrawn:
+        return AppColors.grey;
     }
   }
 
@@ -130,10 +133,15 @@ class _ReceivedProposalCard extends ConsumerWidget {
     switch (proposal.status) {
       case ProposalStatus.pending:
         return 'Beklemede';
+
       case ProposalStatus.accepted:
         return 'Kabul Edildi';
+
       case ProposalStatus.rejected:
         return 'Reddedildi';
+
+      case ProposalStatus.withdrawn:
+        return 'Geri Çekildi';
     }
   }
 
@@ -338,24 +346,34 @@ class _ReceivedProposalCard extends ConsumerWidget {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () async {
-                      await ref
-                          .read(proposalsProvider.notifier)
-                          .updateProposalStatus(
-                        proposal.id,
-                        ProposalStatus.accepted,
-                      );
+                      try {
+                        // Tek işlem: freelancer seçimi + işin inProgress olması
+                        // + diğer uygun tekliflere %50 coin iadesi.
+                        // Contract/Escrow bu akışın parçası değildir.
+                        await ref
+                            .read(proposalsProvider.notifier)
+                            .selectProposalForJob(proposal.id);
 
-                      ref.invalidate(proposalsProvider);
-                      ref.invalidate(contractsProvider);
-                      ref.invalidate(jobsProvider);
+                        ref.invalidate(proposalsProvider);
+                        ref.invalidate(jobsProvider);
 
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            backgroundColor: AppColors.success,
-                            content: Text('Teklif kabul edildi! Lütfen Escrow ödemesini yapın.'),
-                          ),
-                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              backgroundColor: AppColors.success,
+                              content: Text('Freelancer seçildi. Proje artık devam ediyor.'),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              backgroundColor: AppColors.danger,
+                              content: Text('Freelancer seçilemedi: $e'),
+                            ),
+                          );
+                        }
                       }
                     },
                     style: ElevatedButton.styleFrom(

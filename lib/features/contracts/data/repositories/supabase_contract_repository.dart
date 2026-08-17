@@ -1,177 +1,308 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../shared/enums/contract_status.dart';
-import '../../../../shared/enums/payment_status.dart';
 import '../../../../shared/models/contract_delivery_model.dart';
 import '../../../../shared/models/contract_model.dart';
+import '../services/contract_delivery_storage_service.dart';
 import '../../../../shared/models/contract_timeline_model.dart';
 import '../contract_repository.dart';
 
+class RepositoryException implements Exception {
+  final String message;
+  const RepositoryException(this.message);
+
+  @override
+  String toString() => message;
+}
+
 class SupabaseContractRepository implements IContractRepository {
   final SupabaseClient _supabase;
+  static const String _table = 'contracts';
 
   SupabaseContractRepository(this._supabase);
 
-  static const String _table = 'contracts';
+  List<Map<String, dynamic>> _decodeRows(
+      dynamic response,
+      String context,
+      ) {
+    if (response is! List) {
+      throw RepositoryException(
+        'Beklenmeyen veri formatı: $context (${response.runtimeType})',
+      );
+    }
+
+    final rows = <Map<String, dynamic>>[];
+
+    for (final item in response) {
+      if (item is! Map) {
+        throw RepositoryException(
+          'Beklenmeyen satır formatı: $context (${item.runtimeType})',
+        );
+      }
+
+      rows.add(Map<String, dynamic>.from(item));
+    }
+
+    return rows;
+  }
 
   @override
-  Future<List<ContractModel>> getAllContracts() async {
-    final response = await _supabase
-        .from(_table)
-        .select()
-        .order('created_at', ascending: false);
+  Future<List<ContractModel>> getAllContracts({
+    String? organizationId,
+  }) async {
+    final normalizedOrganizationId = organizationId?.trim();
 
-    return (response as List)
-        .map((item) => ContractModel.fromMap(Map<String, dynamic>.from(item)))
-        .toList();
+    if (normalizedOrganizationId == null || normalizedOrganizationId.isEmpty) {
+      return const <ContractModel>[];
+    }
+
+    try {
+      final response = await _supabase
+          .from(_table)
+          .select()
+          .eq('organization_id', normalizedOrganizationId)
+          .order('created_at', ascending: false);
+
+      return _decodeRows(
+        response,
+        'Sözleşmeler',
+      ).map(ContractModel.fromMap).toList();
+    } on PostgrestException catch (e) {
+      throw RepositoryException('Sözleşmeler yüklenemedi: ${e.message}');
+    } catch (e) {
+      throw RepositoryException('Sözleşmeler yüklenemedi: ${e.toString()}');
+    }
   }
 
   @override
   Future<List<ContractModel>> getByFreelancer(String freelancerId) async {
-    final response = await _supabase
-        .from(_table)
-        .select()
-        .eq('freelancer_id', freelancerId)
-        .order('created_at', ascending: false);
+    try {
+      final response = await _supabase
+          .from(_table)
+          .select()
+          .eq('freelancer_id', freelancerId)
+          .order('created_at', ascending: false);
 
-    return (response as List)
-        .map((item) => ContractModel.fromMap(Map<String, dynamic>.from(item)))
-        .toList();
+      return _decodeRows(
+        response,
+        'Freelancer sözleşmeleri',
+      ).map(ContractModel.fromMap).toList();
+    } on PostgrestException catch (e) {
+      throw RepositoryException('Freelancer sözleşmeleri yüklenemedi: ${e.message}');
+    } catch (e) {
+      throw RepositoryException('Freelancer sözleşmeleri yüklenemedi: ${e.toString()}');
+    }
   }
 
   @override
   Future<List<ContractModel>> getByEmployer(String employerId) async {
-    final response = await _supabase
-        .from(_table)
-        .select()
-        .eq('employer_id', employerId)
-        .order('created_at', ascending: false);
+    try {
+      final response = await _supabase
+          .from(_table)
+          .select()
+          .eq('employer_id', employerId)
+          .order('created_at', ascending: false);
 
-    return (response as List)
-        .map((item) => ContractModel.fromMap(Map<String, dynamic>.from(item)))
-        .toList();
+      return _decodeRows(
+        response,
+        'Employer sözleşmeleri',
+      ).map(ContractModel.fromMap).toList();
+    } on PostgrestException catch (e) {
+      throw RepositoryException('Employer sözleşmeleri yüklenemedi: ${e.message}');
+    } catch (e) {
+      throw RepositoryException('Employer sözleşmeleri yüklenemedi: ${e.toString()}');
+    }
   }
 
   @override
   Future<ContractModel?> getById(String contractId) async {
-    final response = await _supabase
-        .from(_table)
-        .select()
-        .eq('id', contractId)
-        .maybeSingle();
+    try {
+      final response = await _supabase
+          .from(_table)
+          .select()
+          .eq('id', contractId)
+          .maybeSingle();
 
-    if (response == null) return null;
+      if (response == null) return null;
 
-    return ContractModel.fromMap(Map<String, dynamic>.from(response));
+      return ContractModel.fromMap(
+        Map<String, dynamic>.from(response),
+      );
+    } on PostgrestException catch (e) {
+      throw RepositoryException('Sözleşme yüklenemedi: ${e.message}');
+    } catch (e) {
+      throw RepositoryException('Sözleşme yüklenemedi: ${e.toString()}');
+    }
+  }
+
+  @override
+  Future<ContractStatus> getCurrentStatus(String contractId) async {
+    try {
+      final response = await _supabase
+          .from(_table)
+          .select('status')
+          .eq('id', contractId)
+          .single();
+
+      final statusValue = response['status'];
+      if (statusValue == null) {
+        throw RepositoryException('Sözleşme durumu bulunamadı');
+      }
+
+      return ContractStatusX.fromString(statusValue);
+    } on PostgrestException catch (e) {
+      throw RepositoryException('Sözleşme durumu yüklenemedi: ${e.message}');
+    } catch (e) {
+      throw RepositoryException('Sözleşme durumu yüklenemedi: ${e.toString()}');
+    }
   }
 
   @override
   Future<ContractModel?> getByJobId(String jobId) async {
-    final response = await _supabase
-        .from(_table)
-        .select()
-        .eq('job_id', jobId)
-        .maybeSingle();
+    try {
+      final response = await _supabase
+          .from(_table)
+          .select()
+          .eq('job_id', jobId)
+          .maybeSingle();
 
-    if (response == null) return null;
+      if (response == null) return null;
 
-    return ContractModel.fromMap(Map<String, dynamic>.from(response));
+      return ContractModel.fromMap(
+        Map<String, dynamic>.from(response),
+      );
+    } on PostgrestException catch (e) {
+      throw RepositoryException('Job sözleşmesi yüklenemedi: ${e.message}');
+    } catch (e) {
+      throw RepositoryException('Job sözleşmesi yüklenemedi: ${e.toString()}');
+    }
   }
 
   @override
   Future<bool> hasContractForJob(String jobId) async {
-    final response = await _supabase
-        .from(_table)
-        .select('id')
-        .eq('job_id', jobId)
-        .limit(1);
+    try {
+      final response = await _supabase
+          .from(_table)
+          .select('id')
+          .eq('job_id', jobId)
+          .limit(1);
 
-    return (response as List).isNotEmpty;
+      return _decodeRows(
+        response,
+        'Job sözleşmesi kontrolü',
+      ).isNotEmpty;
+    } on PostgrestException catch (e) {
+      throw RepositoryException('Job sözleşmesi kontrolü başarısız: ${e.message}');
+    } catch (e) {
+      throw RepositoryException('Job sözleşmesi kontrolü başarısız: ${e.toString()}');
+    }
   }
 
   @override
   Future<List<ContractTimelineModel>> getTimeline(String contractId) async {
-    final response = await _supabase
-        .from('contract_timeline')
-        .select()
-        .eq('contract_id', contractId)
-        .order('created_at', ascending: true);
+    try {
+      final response = await _supabase
+          .from('contract_timeline')
+          .select()
+          .eq('contract_id', contractId)
+          .order('created_at', ascending: true);
 
-    return (response as List)
-        .map((item) => ContractTimelineModel.fromMap(Map<String, dynamic>.from(item)))
-        .toList();
+      return _decodeRows(
+        response,
+        'Sözleşme zaman çizelgesi',
+      ).map(ContractTimelineModel.fromMap).toList();
+    } on PostgrestException catch (e) {
+      throw RepositoryException('Sözleşme zaman çizelgesi yüklenemedi: ${e.message}');
+    } catch (e) {
+      throw RepositoryException('Sözleşme zaman çizelgesi yüklenemedi: ${e.toString()}');
+    }
   }
 
   @override
   Future<List<ContractDeliveryModel>> getDeliveries(String contractId) async {
-    final response = await _supabase
-        .from('contract_deliveries')
-        .select()
-        .eq('contract_id', contractId)
-        .order('version', ascending: false);
+    try {
+      final deliveryResponse = await _supabase
+          .from('contract_deliveries')
+          .select()
+          .eq('contract_id', contractId)
+          .order('version', ascending: false);
 
-    return (response as List)
-        .map((item) => ContractDeliveryModel.fromMap(Map<String, dynamic>.from(item)))
-        .toList();
+      final deliveryRows = _decodeRows(
+        deliveryResponse,
+        'Teslimler',
+      );
+
+      if (deliveryRows.isEmpty) {
+        return const <ContractDeliveryModel>[];
+      }
+
+      final deliveryIds = deliveryRows
+          .map((row) => row['id']?.toString())
+          .whereType<String>()
+          .where((id) => id.isNotEmpty)
+          .toList();
+
+      if (deliveryIds.isEmpty) {
+        return deliveryRows.map(ContractDeliveryModel.fromMap).toList();
+      }
+
+      final fileResponse = await _supabase
+          .from('contract_delivery_files')
+          .select()
+          .inFilter('delivery_id', deliveryIds)
+          .order('created_at', ascending: true);
+
+      final fileRows = _decodeRows(
+        fileResponse,
+        'Teslimat dosyaları',
+      );
+
+      final filesByDelivery = <String, List<Map<String, dynamic>>>{};
+      for (final file in fileRows) {
+        final deliveryId = file['delivery_id']?.toString();
+        if (deliveryId == null || deliveryId.isEmpty) continue;
+        filesByDelivery.putIfAbsent(deliveryId, () => []).add(file);
+      }
+
+      final storage = ContractDeliveryStorageService(_supabase);
+      final models = <ContractDeliveryModel>[];
+
+      for (final row in deliveryRows) {
+        final deliveryId = row['id']?.toString() ?? '';
+        final files = filesByDelivery[deliveryId] ?? const [];
+        final resolvedFiles = <Map<String, dynamic>>[];
+
+        for (final file in files) {
+          final copy = Map<String, dynamic>.from(file);
+          final rawUrl = copy['file_url']?.toString() ?? '';
+          if (rawUrl.startsWith('storage://')) {
+            final storagePath = rawUrl.substring('storage://'.length);
+            try {
+              copy['file_url'] = await storage.createSignedUrl(storagePath);
+            } catch (_) {
+              // Keep the storage reference if a signed URL cannot be created.
+              // The delivery card will show it as unavailable instead of failing
+              // the complete delivery history.
+            }
+          }
+          resolvedFiles.add(copy);
+        }
+
+        final deliveryMap = Map<String, dynamic>.from(row);
+        deliveryMap['contract_delivery_files'] = resolvedFiles;
+        models.add(ContractDeliveryModel.fromMap(deliveryMap));
+      }
+
+      return models;
+    } on PostgrestException catch (e) {
+      throw RepositoryException('Teslimler yüklenemedi: ${e.message}');
+    } catch (e) {
+      throw RepositoryException('Teslimler yüklenemedi: ${e.toString()}');
+    }
   }
 
-  @override
-  Future<void> addContract(ContractModel contract) async {
-    await _supabase.from(_table).insert(contract.toInsertMap());
-  }
 
-  @override
-  Future<void> updateContractStatus(
-      String contractId,
-      ContractStatus status,
-      ) async {
-    await _supabase.from(_table).update({
-      'status': status.name,
-    }).eq('id', contractId);
-  }
 
-  @override
-  Future<void> updatePaymentStatus(
-      String contractId,
-      PaymentStatus status,
-      ) async {
-    await _supabase.from(_table).update({
-      'payment_status': status.name,
-    }).eq('id', contractId);
-  }
 
-  @override
-  Future<void> releasePayment(String contractId, String actorId) async {
-    await _supabase.rpc('release_payment_rpc', params: {
-      'p_contract_id': contractId,
-      'p_actor_id': actorId,
-    });
-  }
 
-  @override
-  Future<void> submitDelivery({
-    required String contractId,
-    required String actorId,
-    required String message,
-    String? fileUrl,
-  }) async {
-    await _supabase.rpc('submit_delivery_rpc', params: {
-      'p_contract_id': contractId,
-      'p_actor_id': actorId,
-      'p_message': message,
-      'p_file_url': fileUrl,
-    });
-  }
 
-  @override
-  Future<void> requestRevision({
-    required String contractId,
-    required String actorId,
-    required String reason,
-  }) async {
-    await _supabase.rpc('request_revision_rpc', params: {
-      'p_contract_id': contractId,
-      'p_actor_id': actorId,
-      'p_reason': reason,
-    });
-  }
 }

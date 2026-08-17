@@ -7,6 +7,7 @@ import '../../../../app/theme/app_colors.dart';
 import '../../../../core/widgets/primary_button.dart';
 import '../../../auth/presentation/providers/auth_state.dart';
 import '../../../wallet/providers/wallet_provider.dart';
+import '../../../notification/presentation/pages/notification_settings_page.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});

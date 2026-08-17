@@ -5,6 +5,7 @@ import '../../../../../app/router/route_names.dart';
 import '../../../../../app/theme/app_colors.dart';
 import '../../../../auth/presentation/providers/auth_state.dart';
 import '../../../admin_guard.dart';
+import '../../../job_boards/ui/admin_job_postings_page.dart';
 
 class AdminDashboardPage extends ConsumerWidget {
   const AdminDashboardPage({super.key});
@@ -71,33 +72,46 @@ class AdminDashboardPage extends ConsumerWidget {
           padding: const EdgeInsets.all(16),
           mainAxisSpacing: 16,
           crossAxisSpacing: 16,
-          children: const [
-            _Card(
-              title: "İlan Onay",
+          children: [
+            const _Card(
+              title: "Freelance İş Onay",
               icon: Icons.assignment_turned_in_rounded,
               route: RouteNames.adminJobs,
             ),
-            _Card(
+            // 🚀 YENİ KARİYER / STAJ İLAN ONAYLARI KARTI
+            _CardWithWidget(
+              title: "Kariyer İlan Onayları",
+              icon: Icons.work_history_rounded,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AdminJobPostingsPage(),
+                  ),
+                );
+              },
+            ),
+            const _Card(
               title: "Kullanıcı Yönetimi",
               icon: Icons.people_alt_rounded,
               route: RouteNames.adminUsers,
             ),
-            _Card(
+            const _Card(
               title: "Ödeme Talepleri",
               icon: Icons.payments_rounded,
               route: RouteNames.adminPayouts,
             ),
-            _Card(
+            const _Card(
               title: "Bakiye İşlemleri",
               icon: Icons.monetization_on_rounded,
               route: RouteNames.adminCoins,
             ),
-            _Card(
+            const _Card(
               title: "Kategori Yönetimi",
               icon: Icons.category_rounded,
               route: RouteNames.adminCategories,
             ),
-            _Card(
+            const _Card(
               title: "Duyuru Yayınla",
               icon: Icons.campaign_rounded,
               route: RouteNames.adminAnnouncements,
@@ -121,6 +135,27 @@ class _Card extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return _CardWithWidget(
+      title: title,
+      icon: icon,
+      onTap: () => Navigator.pushNamed(context, route),
+    );
+  }
+}
+
+class _CardWithWidget extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _CardWithWidget({
+    required this.title,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -140,7 +175,7 @@ class _Card extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(20),
-          onTap: () => Navigator.pushNamed(context, route),
+          onTap: onTap,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

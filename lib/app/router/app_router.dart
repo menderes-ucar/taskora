@@ -15,6 +15,9 @@ import '../../features/freelancer/ui/pages/freelancer_main_shell.dart';
 import '../../features/admin/dashboard/ui/pages/admin_dashboard_page.dart';
 import '../../features/admin/jobs/ui/pages/admin_job_approval_page.dart';
 import '../../features/admin/reports/ui/pages/admin_reports_page.dart';
+import '../../features/admin/admin_guard.dart';
+import '../../features/auth/presentation/pages/role_selection_page.dart';
+import '../../features/organization/presentation/pages/organization_page.dart';
 
 class AppRouter {
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
@@ -32,32 +35,31 @@ class AppRouter {
       case RouteNames.freelancerShell:
         return MaterialPageRoute(builder: (_) => const FreelancerMainShell());
 
+      case RouteNames.organization:
+        return MaterialPageRoute(builder: (_) => const OrganizationPage());
+
     // Admin Rotaları
       case RouteNames.adminDashboard:
-        return MaterialPageRoute(builder: (_) => const AdminDashboardPage());
+        return MaterialPageRoute(builder: (_) => const AdminGuard(child: AdminDashboardPage()));
 
       case RouteNames.adminJobs:
-        return MaterialPageRoute(builder: (_) => const AdminJobApprovalPage());
+        return MaterialPageRoute(builder: (_) => const AdminGuard(child: AdminJobApprovalPage()));
 
       case RouteNames.adminReports:
-        return MaterialPageRoute(builder: (_) => const AdminReportsPage());
+        return MaterialPageRoute(builder: (_) => const AdminGuard(child: AdminReportsPage()));
       case RouteNames.adminUsers:
-        return MaterialPageRoute(builder: (_) => const AdminUsersPage());
+        return MaterialPageRoute(builder: (_) => const AdminGuard(child: AdminUsersPage()));
       case RouteNames.adminCoins:
-        return MaterialPageRoute(builder: (_) => const AdminCoinsPage());
+        return MaterialPageRoute(builder: (_) => const AdminGuard(child: AdminCoinsPage()));
       case RouteNames.adminPayouts:
-        return MaterialPageRoute(builder: (_) => const AdminPayoutsPage());
+        return MaterialPageRoute(builder: (_) => const AdminGuard(child: AdminPayoutsPage()));
       case RouteNames.adminCategories:
-        return MaterialPageRoute(builder: (_) => const AdminCategoriesPage());
+        return MaterialPageRoute(builder: (_) => const AdminGuard(child: AdminCategoriesPage()));
       case RouteNames.adminAnnouncements:
-        return MaterialPageRoute(builder: (_) => const AdminAnnouncementsPage());
+        return MaterialPageRoute(builder: (_) => const AdminGuard(child: AdminAnnouncementsPage()));
 
       case RouteNames.roleSelection:
-        return MaterialPageRoute(
-          builder: (_) => const Scaffold(
-            body: Center(child: Text('Rol Seçim Ekranı')),
-          ),
-        );
+        return MaterialPageRoute(builder: (_) => const RoleSelectionPage());
 
       default:
         return MaterialPageRoute(

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../app/config/app_constants.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../shared/enums/user_role.dart';
 import '../../../notification/data/services/notification_helper.dart'; // 🚀 EKLENDİ
@@ -75,21 +74,16 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
       return;
     }
 
-    String extraData = '';
-    if (selectedRole == UserRole.employer) {
-      extraData =
-      '||COMPANY:${companyNameController.text.trim()}||INDUSTRY:${industryController.text.trim()}';
-    } else {
-      extraData =
-      '||TITLE:${titleController.text.trim()}||RATE:${hourlyRateController.text.trim()}';
-    }
-
     final success = await ref.read(authProvider.notifier).signUp(
       firstName: firstNameController.text.trim(),
-      lastName: '${lastNameController.text.trim()}$extraData',
+      lastName: lastNameController.text.trim(),
       email: emailController.text.trim(),
       password: passwordController.text,
       role: selectedRole,
+      companyName: selectedRole == UserRole.employer ? companyNameController.text.trim() : null,
+      industry: selectedRole == UserRole.employer ? industryController.text.trim() : null,
+      title: selectedRole == UserRole.freelancer ? titleController.text.trim() : null,
+      hourlyRate: selectedRole == UserRole.freelancer ? double.tryParse(hourlyRateController.text.trim()) : null,
     );
 
     if (!mounted) return;

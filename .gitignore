@@ -48,8 +48,24 @@ android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
 lib/firebase_options.dart
 android/key.properties
+android/app/*.jks
+android/app/*.keystore
 ios/Flutter/ephemeral/
 
 # 🚀 OS & Local Environment
 .env*
 !.env.example
+# Supabase local metadata
+supabase/.temp/
+
+# Local test payloads
+fcm-test.json
+
+# Local project archives
+*.zip
+
+# iOS signing / certificates
+*.p12
+*.cer
+*.mobileprovision
+*.p8

@@ -50,18 +50,8 @@ class SupabaseTransactionRepository implements TransactionRepository {
 
   @override
   Future<void> addTransaction(TransactionModel transaction) async {
-    try {
-      await _supabase.from('transactions').insert({
-        'user_id': transaction.userId,
-        'amount': transaction.amount,
-        'type': transaction.type.name,
-        'title': transaction.title,
-        'description': transaction.description,
-        'is_income': transaction.isIncome,
-        'created_at': DateTime.now().toIso8601String(),
-      });
-    } catch (e) {
-      throw ExceptionFactory.create(e, StackTrace.current);
-    }
+    throw StateError(
+      'Muhasebe işlemleri istemciden doğrudan oluşturulamaz.',
+    );
   }
 }

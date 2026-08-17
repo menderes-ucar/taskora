@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' hide Provider;
 
 import '../../../../../app/theme/app_colors.dart';
-import '../../../../../core/widgets/app_chip.dart';
 import '../../../../../core/widgets/empty_state.dart';
 import '../../../../../shared/enums/proposal_status.dart';
 import '../../../../../shared/models/proposal_model.dart';
@@ -102,20 +101,35 @@ class _MyProposalCard extends StatelessWidget {
 
   Color _statusColor() {
     switch (proposal.status) {
-      case ProposalStatus.pending: return AppColors.warning;
-      case ProposalStatus.accepted: return AppColors.success;
-      case ProposalStatus.rejected: return AppColors.danger;
+      case ProposalStatus.pending:
+        return AppColors.warning;
+
+      case ProposalStatus.accepted:
+        return AppColors.success;
+
+      case ProposalStatus.rejected:
+        return AppColors.danger;
+
+      case ProposalStatus.withdrawn:
+        return AppColors.grey;
     }
   }
 
   String _statusText() {
     switch (proposal.status) {
-      case ProposalStatus.pending: return 'Beklemede';
-      case ProposalStatus.accepted: return 'Kabul Edildi';
-      case ProposalStatus.rejected: return 'Reddedildi';
+      case ProposalStatus.pending:
+        return 'Beklemede';
+
+      case ProposalStatus.accepted:
+        return 'Kabul Edildi';
+
+      case ProposalStatus.rejected:
+        return 'Reddedildi';
+
+      case ProposalStatus.withdrawn:
+        return 'Geri Çekildi';
     }
   }
-
   @override
   Widget build(BuildContext context) {
     final statusColor = _statusColor();
