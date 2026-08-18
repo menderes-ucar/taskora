@@ -59,6 +59,11 @@ workflows:
           STRIPE_PUBLISHABLE_KEY=$STRIPE_PUBLISHABLE_KEY
           EOF
 
+      - name: Disable Swift Package Manager
+        script: |
+          set -e
+          flutter config --no-enable-swift-package-manager
+
       - name: Get Flutter packages
         script: |
           set -e
@@ -83,18 +88,18 @@ workflows:
       - name: Calculate build number
         script: |
           set -e
-
+          
           if [ -z "${APP_STORE_APPLE_ID:-}" ] || [ "$APP_STORE_APPLE_ID" = "REPLACE_WITH_APP_STORE_CONNECT_APPLE_ID" ]; then
             echo "ERROR: Set APP_STORE_APPLE_ID in Codemagic."
             exit 1
           fi
-
+          
           LATEST_BUILD_NUMBER="$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)"
-
+          
           if ! [[ "$LATEST_BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
             LATEST_BUILD_NUMBER=0
           fi
-
+          
           BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
           echo "Using iOS build number: $BUILD_NUMBER"
           echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$CM_ENV"
@@ -102,8 +107,11 @@ workflows:
       - name: Build iOS IPA
         script: |
           set -e
-          flutter build ipa             --release             --build-number="$BUILD_NUMBER"             --export-options-plist=/Users/builder/export_options.plist
-
+          
+          flutter build ipa \
+            --release \
+            --build-number="$BUILD_NUMBER" \
+            --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
