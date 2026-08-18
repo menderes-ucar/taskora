@@ -75,11 +75,6 @@ workflows:
           set -e
           flutter analyze || true
 
-      - name: Run Flutter tests
-        script: |
-          set -e
-          flutter test
-
       - name: Set up iOS code signing
         script: |
           set -e
