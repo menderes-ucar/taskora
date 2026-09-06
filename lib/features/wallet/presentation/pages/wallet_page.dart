@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../app/theme/app_colors.dart';
-import '../../../../shared/models/transaction_model.dart';
-import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../../shared/models/coin_model.dart';
+import '../../../coin/data/services/coin_service.dart';
 import '../../../coin/presentation/pages/coin_store_page.dart';
-import '../../providers/transactions_provider.dart';
-import '../../providers/wallet_provider.dart';
-import 'add_funds_page.dart';
-import 'withdraw_page.dart';
 
+/// Cüzdan ekranı şimdilik yalnızca Coin bakiyesi ve Coin işlemleri içindir.
+/// TL para yatırma / çekme akışları korunur ancak UI üzerinden pasiftir.
 class WalletPage extends ConsumerStatefulWidget {
   const WalletPage({super.key});
 
@@ -18,53 +17,42 @@ class WalletPage extends ConsumerStatefulWidget {
 }
 
 class _WalletPageState extends ConsumerState<WalletPage> {
-  final TextEditingController amountController = TextEditingController();
+  final SupabaseCoinService _coinService = SupabaseCoinService();
+
+  late Future<_CoinWalletData> _walletFuture;
 
   @override
-  void dispose() {
-    amountController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _walletFuture = _loadCoinWallet();
   }
 
-  Future<void> _refreshAll() async {
-    ref.invalidate(walletProvider);
-    ref.invalidate(transactionsProvider);
-  }
+  Future<_CoinWalletData> _loadCoinWallet() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      throw Exception('Kullanıcı oturumu bulunamadı.');
+    }
 
-  Future<void> _quickDeposit(double amount) async {
-    final authUser = ref.read(authProvider).user;
-    if (authUser == null || !mounted) return;
+    final results = await Future.wait([
+      _coinService.getUserCoinBalance(user.id),
+      _coinService.getUserCoinTransactions(user.id),
+    ]);
 
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AddFundsPage(userId: authUser.id, initialAmount: amount),
-      ),
+    return _CoinWalletData(
+      balance: results[0] as int,
+      transactions: results[1] as List<CoinTransaction>,
     );
+  }
 
-    await _refreshAll();
+  Future<void> _refresh() async {
+    setState(() {
+      _walletFuture = _loadCoinWallet();
+    });
+    await _walletFuture;
   }
 
   @override
   Widget build(BuildContext context) {
-    final authUser = ref.watch(authProvider).user;
-    final currentUserId = authUser?.id;
-
-    if (currentUserId == null) {
-      return const Scaffold(
-        backgroundColor: AppColors.primary,
-        body: Center(
-          child: Text(
-            'Kullanıcı oturumu bulunamadı.',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-        ),
-      );
-    }
-
-    final walletAsync = ref.watch(walletProvider);
-    final transactionsAsync = ref.watch(transactionsProvider);
-
     return Scaffold(
       backgroundColor: AppColors.primary,
       appBar: AppBar(
@@ -77,25 +65,80 @@ class _WalletPageState extends ConsumerState<WalletPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-            onPressed: _refreshAll,
+            onPressed: _refresh,
           ),
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _refreshAll,
+        onRefresh: _refresh,
         color: AppColors.primaryDark,
-        child: walletAsync.when(
-          data: (wallet) {
+        child: FutureBuilder<_CoinWalletData>(
+          future: _walletFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              );
+            }
+
+            if (snapshot.hasError) {
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(24),
+                children: [
+                  const SizedBox(height: 80),
+                  const Icon(
+                    Icons.error_outline_rounded,
+                    color: Colors.white,
+                    size: 48,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Coin cüzdanı yüklenemedi.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${snapshot.error}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 20),
+                  Center(
+                    child: OutlinedButton(
+                      onPressed: _refresh,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: const BorderSide(color: Colors.white70),
+                      ),
+                      child: const Text('Tekrar Dene'),
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            final data = snapshot.data!;
+
             return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
               children: [
-                // 🚀 Bakiye Kartı
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(28),
                     gradient: const LinearGradient(
-                      colors: [Color(0xFF0E2238), Color(0xFF103847), Color(0xFF0BA99C)],
+                      colors: [
+                        Color(0xFF0E2238),
+                        Color(0xFF103847),
+                        Color(0xFF0BA99C),
+                      ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -110,236 +153,212 @@ class _WalletPageState extends ConsumerState<WalletPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Kullanılabilir Bakiye',
-                        style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600, fontSize: 14),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '₺${wallet.balance.toStringAsFixed(2)}',
-                        style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900),
-                      ),
-                      const SizedBox(height: 18),
-                      Row(
+                      const Row(
                         children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFFFB800),
-                                foregroundColor: Colors.black,
-                                elevation: 0,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                              ),
-                              onPressed: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const CoinStorePage()),
-                              ),
-                              icon: const Icon(Icons.monetization_on_rounded, size: 16),
-                              label: const Text('Coin Al', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                            ),
+                          Icon(
+                            Icons.monetization_on_rounded,
+                            color: Color(0xFFFFC107),
+                            size: 22,
                           ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: AppColors.primaryDark,
-                                elevation: 0,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                              ),
-                              onPressed: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => AddFundsPage(userId: currentUserId)),
-                              ),
-                              icon: const Icon(Icons.add_rounded, size: 16),
-                              label: const Text('Para Ekle', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                side: const BorderSide(color: Colors.white70),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                              ),
-                              onPressed: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => WithdrawPage(userId: currentUserId)),
-                              ),
-                              icon: const Icon(Icons.north_east_rounded, size: 16),
-                              label: const Text('Para Çek', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                          SizedBox(width: 8),
+                          Text(
+                            'Coin Bakiyeniz',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${data.balance} Coin',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const CoinStorePage(),
+                              ),
+                            );
+                            if (mounted) await _refresh();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFFFB800),
+                            foregroundColor: Colors.black,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          icon: const Icon(
+                            Icons.add_circle_outline_rounded,
+                            size: 19,
+                          ),
+                          label: const Text(
+                            'Coin Satın Al',
+                            style: TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 24),
-
-                const Text('Hızlı Bakiye Yükle', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white)),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: _QuickAmountCard(amount: 100, onTap: () => _quickDeposit(100))),
-                    const SizedBox(width: 12),
-                    Expanded(child: _QuickAmountCard(amount: 250, onTap: () => _quickDeposit(250))),
-                  ],
+                const Text(
+                  'Coin İşlem Geçmişi',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: _QuickAmountCard(amount: 500, onTap: () => _quickDeposit(500))),
-                    const SizedBox(width: 12),
-                    Expanded(child: _QuickAmountCard(amount: 1000, onTap: () => _quickDeposit(1000))),
-                  ],
-                ),
-                const SizedBox(height: 24),
-
-                const Text('İşlem Geçmişi', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white)),
-                const SizedBox(height: 12),
-
-                // 🚀 İşlem Geçmişi Liste Alanı
-                transactionsAsync.when(
-                  data: (transactions) {
-                    if (transactions.isEmpty) {
-                      return Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
-                        child: const Center(
-                          child: Text('Henüz bir işlem bulunmuyor.', style: TextStyle(color: AppColors.grey, fontWeight: FontWeight.w600)),
+                if (data.transactions.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'Henüz bir Coin işlemi bulunmuyor.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: AppColors.grey,
+                          fontWeight: FontWeight.w600,
                         ),
-                      );
-                    }
-                    return Column(children: transactions.map((tx) => _TransactionCard(transaction: tx)).toList());
-                  },
-                  loading: () => const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: Colors.white))),
-                  error: (error, _) => Center(child: Text('İşlemler yüklenemedi: $error', style: const TextStyle(color: Colors.white70))),
+                      ),
+                    ),
+                  )
+                else
+                  ...data.transactions.map(
+                        (transaction) => _CoinTransactionCard(
+                      transaction: transaction,
+                    ),
+                  ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Para yatırma ve para çekme işlemleri şimdilik pasiftir. Coin satın alma ve Coin işlemleri kullanılabilir.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ],
             );
           },
-          loading: () => const Center(child: CircularProgressIndicator(color: Colors.white)),
-          error: (error, stack) => Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text('Cüzdan verisi alınamadı:\n$error', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
-                const SizedBox(height: 12),
-                ElevatedButton(
-                  onPressed: _refreshAll,
-                  child: const Text('Tekrar Deneyin'),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );
   }
 }
 
-class _TransactionCard extends StatelessWidget {
-  final TransactionModel transaction;
-  const _TransactionCard({required this.transaction});
+class _CoinWalletData {
+  final int balance;
+  final List<CoinTransaction> transactions;
+
+  const _CoinWalletData({
+    required this.balance,
+    required this.transactions,
+  });
+}
+
+class _CoinTransactionCard extends StatelessWidget {
+  final CoinTransaction transaction;
+
+  const _CoinTransactionCard({required this.transaction});
 
   @override
   Widget build(BuildContext context) {
-    final amountColor = transaction.isIncome ? AppColors.success : AppColors.danger;
-    final prefix = transaction.isIncome ? '+' : '-';
+    final isPositive = transaction.amount > 0;
+    final amountText = '${isPositive ? '+' : ''}${transaction.amount} Coin';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(18),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.primaryDark.withValues(alpha: 0.20)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.black.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
       ),
       child: Row(
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              color: amountColor.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(14),
+              color: isPositive
+                  ? Colors.green.withValues(alpha: 0.10)
+                  : Colors.red.withValues(alpha: 0.10),
+              shape: BoxShape.circle,
             ),
             child: Icon(
-              transaction.isIncome ? Icons.south_west_rounded : Icons.north_east_rounded,
-              color: amountColor,
-              size: 20,
+              isPositive
+                  ? Icons.add_circle_outline_rounded
+                  : Icons.remove_circle_outline_rounded,
+              color: isPositive ? Colors.green : Colors.red,
             ),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(transaction.title, style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.black, fontSize: 14)),
-                const SizedBox(height: 4),
-                Text(transaction.description, style: const TextStyle(color: AppColors.grey, fontSize: 12, fontWeight: FontWeight.w500)),
+                Text(
+                  transaction.typeLabel,
+                  style: const TextStyle(
+                    color: AppColors.black,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  transaction.description?.trim().isNotEmpty == true
+                      ? transaction.description!
+                      : transaction.formattedDate,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.grey,
+                    fontSize: 12,
+                  ),
+                ),
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           Text(
-            '$prefix₺${transaction.amount.toStringAsFixed(2)}',
-            style: TextStyle(color: amountColor, fontWeight: FontWeight.w900, fontSize: 15),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickAmountCard extends StatelessWidget {
-  final double amount;
-  final VoidCallback onTap;
-  const _QuickAmountCard({required this.amount, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.primaryDark.withValues(alpha: 0.20)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.black.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 18),
-            child: Column(
-              children: [
-                const Icon(Icons.add_circle_outline_rounded, color: AppColors.primaryDark, size: 22),
-                const SizedBox(height: 8),
-                Text('₺${amount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppColors.black)),
-              ],
+            amountText,
+            style: TextStyle(
+              color: isPositive ? Colors.green.shade700 : Colors.red.shade700,
+              fontWeight: FontWeight.w900,
             ),
           ),
-        ),
+        ],
       ),
     );
   }

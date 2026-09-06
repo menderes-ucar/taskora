@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../core/error/app_exception.dart';
@@ -303,16 +304,39 @@ class SupabaseCoinService implements ICoinService {
   @override
   Future<List<CoinPackage>> getActiveCoinPackages() async {
     try {
+      debugPrint('========== COIN PACKAGE DEBUG ==========');
+      debugPrint(
+        'Current Supabase user: ${_supabase.auth.currentUser?.id}',
+      );
+      debugPrint(
+        'Current session exists: ${_supabase.auth.currentSession != null}',
+      );
+
       final response = await _supabase
           .from('coin_packages')
-          .select('id,name,coin_amount,price_try,is_active,sort_order,store_product_id')
+          .select(
+        'id,name,coin_amount,price_try,is_active,sort_order,store_product_id',
+      )
           .eq('is_active', true)
           .order('sort_order', ascending: true);
 
+      debugPrint('COIN PACKAGE RAW RESPONSE: $response');
+      debugPrint(
+        'COIN PACKAGE COUNT: ${(response as List<dynamic>).length}',
+      );
+      debugPrint('========================================');
+
       return (response as List<dynamic>)
-          .map((json) => CoinPackage.fromMap(Map<String, dynamic>.from(json as Map)))
+          .map(
+            (json) => CoinPackage.fromMap(
+          Map<String, dynamic>.from(json as Map),
+        ),
+      )
           .toList(growable: false);
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('❌ COIN PACKAGE ERROR: $e');
+      debugPrint('$stack');
+
       throw AppException(
         message: 'Coin paketleri alınamadı: $e',
         type: AppExceptionType.serverError,

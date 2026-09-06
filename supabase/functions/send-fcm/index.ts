@@ -152,8 +152,6 @@ serve(async (req) => {
 
     const rawBody = await req.text();
 
-    console.log("RAW REQUEST BODY:", rawBody);
-
     const jsonStart = rawBody.indexOf("{");
 
     if (jsonStart === -1) {
@@ -174,7 +172,7 @@ serve(async (req) => {
           error instanceof Error
             ? error.message
             : String(error)
-        } | RAW BODY: ${rawBody}`,
+        }`,
       );
     }
 
@@ -262,94 +260,26 @@ serve(async (req) => {
 
     const userId = String(record.user_id).trim();
 
-    console.log("TOKEN LOOKUP START:", {
-      userId,
-      userIdLength: userId.length,
-      supabaseUrl,
-      keyLength: serviceRoleKey.length,
-    });
-
     const {
-      data: allTokens,
-      error: allTokensError,
+      data: tokens,
+      error: tokensError,
     } = await supabase
       .from("user_push_tokens")
-      .select(
-        "id, user_id, token, platform",
-      )
+      .select("id, user_id, token, platform")
+      .eq("user_id", userId)
       .limit(100);
 
-    console.log("ALL PUSH TOKENS RESULT:", {
-      error:
-        allTokensError?.message ?? null,
-
-      count:
-        allTokens?.length ?? 0,
-
-      rows:
-        allTokens?.map((row) => ({
-          id: row.id,
-          user_id: row.user_id,
-          user_id_string:
-            String(row.user_id),
-          user_id_length:
-            String(row.user_id).length,
-          platform: row.platform,
-        })) ?? [],
-    });
-
-    if (allTokensError) {
+    if (tokensError) {
       throw new Error(
-        `user_push_tokens okunamadı: ${allTokensError.message}`,
+        `user_push_tokens okunamadı: ${tokensError.message}`,
       );
     }
 
-    const tokens = (
-      allTokens ?? []
-    ).filter((row) => {
-      const rowUserId =
-        String(row.user_id).trim();
-
-      return rowUserId === userId;
-    });
-
-    console.log("FINAL TOKEN MATCH:", {
-      requestedUserId: userId,
-      requestedUserIdLength:
-        userId.length,
-      count: tokens.length,
-      tokens: tokens.map((row) => ({
-        id: row.id,
-        user_id: row.user_id,
-        platform: row.platform,
-      })),
-    });
-
     if (tokens.length === 0) {
-      console.error(
-        "TOKEN BULUNAMADI:",
-        {
-          requestedUserId: userId,
-          requestedUserIdLength:
-            userId.length,
-
-          availableTokenCount:
-            allTokens?.length ?? 0,
-
-          availableUserIds:
-            allTokens?.map((row) =>
-              String(row.user_id).trim()
-            ) ?? [],
-        },
-      );
-
       return new Response(
         JSON.stringify({
           success: false,
           error: "Push token bulunamadı.",
-          userId,
-          availableTokenCount:
-            allTokens?.length ?? 0,
         }),
         {
           status: 404,

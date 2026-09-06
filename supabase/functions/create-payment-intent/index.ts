@@ -18,6 +18,7 @@ const json = (body: unknown, status = 200) =>
 
 function requireEnv(name: string): string {
   const value = Deno.env.get(name);
+
   if (!value) {
     throw new Error(`Missing environment variable: ${name}`);
   }
@@ -283,6 +284,11 @@ Deno.serve(async (req) => {
       params.set(
         'metadata[currency]',
         currency,
+      );
+
+      params.set(
+        'metadata[purpose]',
+        'wallet_topup',
       );
 
       params.set(

@@ -37,8 +37,17 @@ class _CoinStorePageState extends ConsumerState<CoinStorePage> {
       await _iap.initialize(
         onPurchase: (purchase) async {
           final result = await _iap.verifyAndDeliver(purchase);
+
+          // AuthUser keeps the displayed coin balance. The server has already
+          // credited the coins, so reload the profile immediately after a
+          // successful/duplicate delivery to make the UI reflect the DB.
+          await ref.read(authProvider.notifier).restoreSession();
+
           if (!mounted) return;
-          _showMessage(result.message, success: true);
+          _showMessage(
+            result.message,
+            success: true,
+          );
         },
         onTerminalPurchase: (purchase) {
           if (!mounted) return;
@@ -284,23 +293,43 @@ class _CoinStorePageState extends ConsumerState<CoinStorePage> {
             ),
           ),
           const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: !hasStoreProductId || product == null || _buyingProductId != null
-                ? null
-                : () => _buy(package),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryDark,
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: Colors.grey.shade300,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: isBuying
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : Text(
-              product != null ? 'Satın Al' : 'Hazır değil',
-              style: const TextStyle(fontWeight: FontWeight.w900),
+          SizedBox(
+            width: 92,
+            child: ElevatedButton(
+              onPressed: !hasStoreProductId ||
+                  product == null ||
+                  _buyingProductId != null
+                  ? null
+                  : () => _buy(package),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryDark,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: Colors.grey.shade300,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 10,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: isBuying
+                  ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+                  : Text(
+                product != null ? 'Satın Al' : 'Hazır değil',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12,
+                ),
+              ),
             ),
           ),
         ],

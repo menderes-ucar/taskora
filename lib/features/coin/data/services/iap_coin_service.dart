@@ -11,11 +11,13 @@ import '../../../../shared/models/coin_model.dart';
 class IapPurchaseResult {
   final bool success;
   final int coinAmount;
+  final int balance;
   final String message;
 
   const IapPurchaseResult({
     required this.success,
     required this.coinAmount,
+    required this.balance,
     required this.message,
   });
 }
@@ -130,11 +132,17 @@ class IapCoinService {
     }
 
     try {
+      // IMPORTANT: the server must successfully verify + credit the purchase
+      // before the store transaction is consumed/completed. If verification
+      // fails, we intentionally leave the purchase pending so it can be
+      // retried instead of losing the customer's entitlement.
       await onPurchase(purchase);
 
       if (Platform.isAndroid) {
-        final androidAddition = _iap.getPlatformAddition<InAppPurchaseAndroidPlatformAddition>();
-        await androidAddition.consumePurchase(purchase);
+        final androidAddition =
+        _iap.getPlatformAddition<InAppPurchaseAndroidPlatformAddition>();
+        final result = await androidAddition.consumePurchase(purchase);
+        debugPrint('IAP consume result: ${result.responseCode}');
       }
 
       if (purchase.pendingCompletePurchase) {
@@ -142,8 +150,10 @@ class IapCoinService {
       }
 
       onTerminalPurchase(purchase);
-    } catch (e) {
-      debugPrint('IAP verification/delivery failed: $e');
+    } catch (e, stack) {
+      debugPrint('IAP verification/delivery failed: $e\n$stack');
+      // DO NOT consume/complete a purchase when server delivery failed.
+      // Google Play can then deliver the transaction again.
       onTerminalPurchase(purchase);
     }
   }
@@ -173,7 +183,14 @@ class IapCoinService {
     final result = IapPurchaseResult(
       success: true,
       coinAmount: (data['coin_amount'] as num?)?.toInt() ?? 0,
+      balance: (data['balance'] as num?)?.toInt() ?? 0,
       message: data['message']?.toString() ?? 'Coinler hesabınıza eklendi.',
+    );
+
+    debugPrint(
+      'IAP delivered: product=${purchase.productID}, '
+          'transaction=${purchase.purchaseID}, '
+          'coinAmount=${result.coinAmount}, balance=${result.balance}',
     );
 
     return result;

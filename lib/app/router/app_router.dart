@@ -17,6 +17,8 @@ import '../../features/admin/jobs/ui/pages/admin_job_approval_page.dart';
 import '../../features/admin/reports/ui/pages/admin_reports_page.dart';
 import '../../features/admin/admin_guard.dart';
 import '../../features/auth/presentation/pages/role_selection_page.dart';
+import '../../features/auth/presentation/widgets/auth_gate.dart';
+import '../../shared/enums/user_role.dart';
 import '../../features/organization/presentation/pages/organization_page.dart';
 
 class AppRouter {
@@ -30,13 +32,33 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const RegisterPage());
 
       case RouteNames.employerShell:
-        return MaterialPageRoute(builder: (_) => const EmployerMainShell());
+        return MaterialPageRoute(
+          builder: (_) => const AuthRouteGuard(
+            allowedRoles: {UserRole.employer},
+            child: EmployerMainShell(),
+          ),
+        );
 
       case RouteNames.freelancerShell:
-        return MaterialPageRoute(builder: (_) => const FreelancerMainShell());
+        return MaterialPageRoute(
+          builder: (_) => const AuthRouteGuard(
+            allowedRoles: {UserRole.freelancer},
+            child: FreelancerMainShell(),
+          ),
+        );
 
       case RouteNames.organization:
-        return MaterialPageRoute(builder: (_) => const OrganizationPage());
+        return MaterialPageRoute(
+          builder: (_) => const AuthRouteGuard(
+            allowedRoles: {
+              UserRole.admin,
+              UserRole.superAdmin,
+              UserRole.employer,
+              UserRole.freelancer,
+            },
+            child: OrganizationPage(),
+          ),
+        );
 
     // Admin Rotaları
       case RouteNames.adminDashboard:

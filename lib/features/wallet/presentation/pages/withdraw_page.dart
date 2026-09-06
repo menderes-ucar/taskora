@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:uuid/uuid.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../providers/wallet_provider.dart';
 
@@ -37,7 +36,6 @@ class _WithdrawPageState extends ConsumerState<WithdrawPage> {
     final amount = double.tryParse(_amountController.text.trim()) ?? 0;
     final bankName = _bankNameController.text.trim();
     final bankAccount = _bankAccountController.text.trim();
-    final idempotencyKey = const Uuid().v4();
 
     if (amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -85,10 +83,8 @@ class _WithdrawPageState extends ConsumerState<WithdrawPage> {
             'p_amount': amount,
             'p_bank_name': bankName,
             'p_bank_account': bankAccount,
-            'p_idempotency_key': idempotencyKey,
           },
         );
-
         if (!mounted) return;
 
         ScaffoldMessenger.of(context).showSnackBar(
