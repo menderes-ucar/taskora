@@ -69,3 +69,4 @@ fcm-test.json
 *.cer
 *.mobileprovision
 *.p8
+.iap-secrets.env
